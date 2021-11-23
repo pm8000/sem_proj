@@ -6,8 +6,8 @@ import LB_source as src
 L=10 #domain length in lattice points
 l=1 #pipe length
 dx=l/L
-dt=1 #time step
-t_end=10 #end time
+dt=1e-6 #time step
+t_end=8*dt #end time
 nt=int(t_end/dt) #number of time steps
 u_in=10 #inlet velocity
 T_in=200+273 #inlet temperature
@@ -87,7 +87,7 @@ for t in range(nt):
 
     #boundary condition
     f[0,-1]=0.001           #very small right propagating flow at the outlet
-    f[2, 0]=rho_in/C_rho-f[1,0]-f[0,0] #fix inlet density
+    f[2, 0]=u_in*rho_in/(C_u*C_rho)+f[0,0] #fix inlet density
     g[0,-1]=0.001           #very small right propagating flow at the outlet
     g[2, 0]=(cv_nd*T_in/C_T+0.5*(u_in/C_u)**2) - g[1,0] -g[0,0] #fix inlet energy
 
@@ -102,7 +102,10 @@ for t in range(nt):
     fun.get_f_eq(f_eq, rho, u, T, R_nd, omega, dt_nd, dx_nd)
     fun.get_g_eq(g_eq, rho, u, E, T, R_nd)
     fun.get_g_star(g_star, g_eq, g, rho, u, T, R_nd, dt_nd, dx_nd)
-    src.get_source_populations(source, source_last, T, T_wall, alpha_nd, d/C_l, dt_nd)
+    src.get_source_populations(source, source_last, T, T_wall, alpha_nd, d/C_l, dt_nd, order=1)
     
     f[:,:]=omega*f_eq[:,:] + (1-omega)*f[:,:]
     g[:,:]=omega*g_eq[:,:] + (1-omega_1)*g[:,:] + (omega_1-omega)*g_star[:,:] + source[:,:]
+    plt.plot(rho[:]*E[:], label=t)
+plt.legend()
+plt.show()

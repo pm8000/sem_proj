@@ -39,6 +39,6 @@ def get_source_populations(source, source_last, T, T_wall, alpha, d, dt, order=2
     if order==2:
         source_correction=dt*get_dqdt(source_total, source_last, dt)
         source_last=source_total
-    source[0,:]=1.0/6*dt*(source_total[:]+source_correction[:])
-    source[1,:]=2.0/3*dt*(source_total[:]+source_correction[:])
+    source[0,:]=-1.0/6*dt*(source_total[:]+source_correction[:])
+    source[1,:]=-2.0/3*dt*(source_total[:]+source_correction[:])
     source[2,:]=source[0,:]

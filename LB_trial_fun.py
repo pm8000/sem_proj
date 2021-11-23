@@ -16,7 +16,7 @@ def get_E(f, rho):
     #calculate macroscopic local total energy
     #input: population matrix f (3xN), macroscopic local density rho
     #output: total energy vector (1xN)
-    return (f[0,:]+f[1,:]+f[2,:])/(2*rho[:])
+    return (f[0,:]+f[1,:]+f[2,:])/(rho[:])
 
 def get_U(E, u):
     #calculate internal energy

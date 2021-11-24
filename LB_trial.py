@@ -6,7 +6,7 @@ import LB_source as src
 L=10 #domain length in lattice points
 l=1 #pipe length
 dx=l/L
-dt=1e-6 #time step
+dt=1e-9 #time step
 t_end=8*dt #end time
 nt=int(t_end/dt) #number of time steps
 u_in=10 #inlet velocity
@@ -86,8 +86,8 @@ for t in range(nt):
     g[2,:]=np.roll(g[2,:], 1)
 
     #boundary condition
-    f[0,-1]=0.001           #very small right propagating flow at the outlet
     f[2, 0]=u_in*rho_in/(C_u*C_rho)+f[0,0] #fix inlet density
+    f[0,-1]=f[2,-1]-(f[2,0]-f[0,0])        #equal mass flow at outlet as inlet
     g[0,-1]=0.001           #very small right propagating flow at the outlet
     g[2, 0]=(cv_nd*T_in/C_T+0.5*(u_in/C_u)**2) - g[1,0] -g[0,0] #fix inlet energy
 
@@ -106,6 +106,6 @@ for t in range(nt):
     
     f[:,:]=omega*f_eq[:,:] + (1-omega)*f[:,:]
     g[:,:]=omega*g_eq[:,:] + (1-omega_1)*g[:,:] + (omega_1-omega)*g_star[:,:] + source[:,:]
-    plt.plot(rho[:]*E[:], label=t)
+    plt.plot(rho[:]*u[:], label=t)
 plt.legend()
 plt.show()

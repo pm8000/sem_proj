@@ -59,20 +59,20 @@ def get_dQdx(Q, dx):
     dQdx[-1]=(Q[-1]-Q[-2])/(2*dx)
     return dQdx
 
-def get_P_ex(P_eq, dQdx, rho, dt, omega):
+def get_P_ex(dQdx, rho, u, T, R, dt, omega):
     #compensate equilibrium pressure
-    #inputs: (1xN) vectors of equilibrium pressure (P_eq), derrivative of Q (dQdx), density (rho) and scalars omega and dt
+    #inputs: (1xN) derrivative of Q (dQdx), density (rho), velocity (u), Temperature (T) and scalars R, omega and dt
     #output: (1xN) vector of compensated pressure
-    return P_eq[:] + dt*(2-omega)/(2*rho[:]*omega)*dQdx[:]
+    return R*T[:] + u[:]**2 + dt*(2-omega)/(2*rho[:]*omega)*dQdx[:]
 
 def get_f_eq(f_eq, rho, u, T, R, omega, dx, dt):
     #calculate equilibrium populations for momentum lattice
     #input: solution matrix f_eq (3xN), vectors (1xN) for density (rho), velocity (u), temperature (T) and scalars R, omega, dx, dt
     #output: the equilibrium populations will be stored in f_eq (3xN matrix), passed by reference
-    P_eq=get_P_eq(rho, u, T, R)
+    #P_eq=get_P_eq(rho, u, T, R)
     Q=get_Q(rho, u, T, R)
     dQdx=get_dQdx(Q, dx)
-    P_ex=get_P_ex(P_eq, dQdx, rho, dt, omega)
+    P_ex=get_P_ex(dQdx, rho, u, T, R, dt, omega)
     f_eq[0,:]=0.5 * rho[:] * (-u[:] + P_ex[:])
     f_eq[1,:]=rho[:] * (1 - P_ex[:])
     f_eq[2,:]=0.5 * rho[:] * (u[:] + P_ex[:])

@@ -6,17 +6,18 @@ Created on Fri Nov 26 08:52:35 2021
 @author: pascal
 """
 import numpy as np
+import matplotlib.pyplot as plt
 import math
 import rs_trial_EOS as eos
 import rs_trial_fluxes as flux
 import rs_trial_source as src
 
-L=0.1 #pipe length
+L=1 #pipe length
 dx=0.01 #grid density
 N=math.ceil(L/dx) #number of cells
 d=0.1 #pipe diameter
 
-t_end=1e-3 #end time
+t_end=1e-1 #end time
 cfl=0.5 #cfl number to define time step
 
 alpha=200 #convection heat transfer coefficient
@@ -45,16 +46,25 @@ source=np.zeros([3,N])
 
 fields[0,:]=p_amb/(R*T_amb)
 fields[1,:]=fields[0,:]*u_inlet
-fields[2,:]=eos.get_E(rho_amb, 0, p_amb, gamma)
+fields[2,:]=eos.get_E(rho_amb, u_inlet, p_amb, gamma)
 fields[3,:]=p_amb
 
 #determine time step
 cs_max=eos.get_cs(p_inlet, rho_inlet)
 dt=cfl*dx/cs_max
 nt=math.ceil(t_end/dt)
+p=[]
+T_list=[]
+density=[]
 
-for i in range(50):
+for i in range(nt):
     T[:]=fields[3,:]/(fields[0,:]*R)
+    if i%200==0:
+        plt.plot(np.linspace(0.005,0.995,100),fields[1,:], label='t='+str(i*dt)+' s')
+    T_list.append(T[0])
+    #print(T_list)
+    if i==2000:
+        eos.get_E(rho_inlet, u_inlet, p_inlet)
     print("step",i)
     if (i+1)*dt>t_end:
         dt=t_end-i*dt
@@ -63,7 +73,12 @@ for i in range(50):
     #BC are added in the same step
     flux.update_fluxes(fluxes, fields, inlet_flux, inlet)
     #add source
-    #src.add_source(source, alpha, d, fields, R, T_wall)
+    src.add_source(source, alpha, d, fields, R, T_wall)
     #integrate with euler explicit
-    fields[:-1,:]+=dt/dx*(fluxes[:,:-1]-fluxes[:,1:]+source[:,:])
+    prt_1=dt*source[2,0]
+    prt_2=dt/dx*(fluxes[2,0]-fluxes[2,1])
+    fields[:-1,:]+=(dt/dx*(fluxes[:,:-1]-fluxes[:,1:])+dt*source[:,:])
+    fields[3,:]=eos.get_p(fields[0,:], fields[1,:]/fields[0,:], fields[2,:])
+plt.legend()
+plt.show()
 

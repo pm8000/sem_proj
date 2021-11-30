@@ -8,6 +8,7 @@ Created on Fri Nov 26 10:16:43 2021
 
 import numpy as np
 import rs_trial_EOS as eos
+import pandas as pd
 
 def minmod(u, u_p, u_m):
     #apply minmod slope limiter
@@ -17,7 +18,7 @@ def minmod(u, u_p, u_m):
     d2=u-u_m
     if np.sign(d1)!=np.sign(d2):
         return 0
-    return np.sign(min(abs(d1),abs(d2)))
+    return np.sign(d1)*min(abs(d1),abs(d2))
 
 def get_middle_state(fields, i, inlet=[0,0,0], border=0):
     #calculate the values at cell interface assuming linearised problem at boundary and use linear profile within cell limited by minmod
@@ -29,23 +30,27 @@ def get_middle_state(fields, i, inlet=[0,0,0], border=0):
         print("encountered unknown value for border in function get_middle_state")
         assert(False)
     #get values at cell boundary
-    #todo: boundary cases
+    #boundary cases
     if border==1:
         #construct ghost cell to the left to achieve desired flux
         print("i",i)
-        print("average", fields[0,i-1])
-        print("correction", minmod(fields[0, i-1], fields[0,i], 2*inlet[0]-fields[0,i-1]))
+        #print("average", fields[0,i-1])
+        #print("correction", minmod(fields[0, i-1], fields[0,i], 2*inlet[0]-fields[0,i-1]))
         rho_l=fields[0,i-1]+0.5*minmod(fields[0, i-1], fields[0,i], 2*inlet[0]-fields[0,i-1])
         u_l=fields[1,i-1]/fields[0, i-1]+0.5*minmod(fields[1,i-1]/fields[0,i-1], fields[1,i]/fields[0,i], 2*inlet[1]-fields[1,i-1]/fields[0,i-1])
         p_l=fields[3,i-1]+0.5*minmod(fields[3, i-1], fields[3,i], 2*inlet[2]-fields[3,i-1])
+        
+        #rho_l=fields[0,0]
+        #u_l=fields[1,0]/rho_l
+        #p_l=fields[3,0]
     else:
-        print("i",i)
-        print("average", fields[0,i-1])
-        print("correction", minmod(fields[0,i-1], fields[0,i], fields[0,i-2]))
+        #print("i",i)
+        #print("average", fields[0,i-1])
+        #print("correction", minmod(fields[0,i-1], fields[0,i], fields[0,i-2]))
         rho_l=fields[0, i-1]+0.5*minmod(fields[0,i-1], fields[0,i], fields[0,i-2])
         u_l=fields[1,i-1]/fields[0,i-1]+0.5*minmod(fields[1,i-1]/fields[0,i-1], fields[1,i]/fields[0,i], fields[1,i-2]/fields[0,i-1])
         p_l=fields[3,i-1]+0.5*minmod(fields[3,i-1], fields[3,i], fields[3,i-2])
-    if rho_l<0:
+    if rho_l<0 or pd.isna(rho_l)==True:
         assert(False)
     cs_l=eos.get_cs(p_l, rho_l)
     
@@ -65,11 +70,14 @@ def get_middle_state(fields, i, inlet=[0,0,0], border=0):
         
     u_m=(rho_l*u_l*cs_l+rho_r*u_r*cs_r+p_l-p_r)/(rho_l*cs_l+rho_r*cs_r)
     p_m=p_l-rho_l*cs_l*(u_m-u_l)
-    if u_l+u_r<=0:
+    if u_l+u_r>=0:
         rho_m=(p_m-p_l)/(cs_l*cs_l)+rho_l
     else:
         rho_m=(p_m-p_r)/(cs_r*cs_r)+rho_r
     E_m=eos.get_E(rho_m, u_m, p_m)
+    #print("rho_l", rho_l, "u_l", u_l, "p_l", p_l, "cs_l", cs_l)
+    #print("rho_r", rho_r,"u_r", u_r, "p_r", p_r, "cs_r", cs_r)
+    #print("rho", rho_m, "u", u_m, "p", p_m, "E", E_m)
     return (rho_m, u_m, p_m, E_m)
 
 def get_outlet_bc(fluxes, fields):
@@ -119,4 +127,18 @@ def update_fluxes(fluxes, fields, inlet_flux, inlet):
         fluxes[1,i]=rho_m*u_m*u_m+p_m
         fluxes[2,i]=u_m*(E_m+p_m)
         
+    get_outlet_bc(fluxes, fields)
+    
+def update_fluxes_upwind(fluxes, fields, inlet_flux, inlet):
+    #calculate flux at cell interface based on upwind scheme
+    get_inflow_bc(fluxes, inlet_flux)
+    for i in range(1, fluxes.shape[1]-1):
+        if fields[1,i-1]/fields[0,i-1]+fields[1,i]/fields[0,i]<0:
+            fluxes[0,i]=fields[1,i]
+            fluxes[1,i]=fields[1,i]**2/fields[0,i]+fields[3,i]
+            fluxes[2,i]=fields[1,i]/fields[0,i]*(fields[2,i]+fields[3,i])
+        else:
+            fluxes[0,i]=fields[1,i-1]
+            fluxes[1,i]=fields[1,i-1]**2/fields[0,i-1]+fields[3,i-1]
+            fluxes[2,i]=fields[1,i-1]/fields[0,i-1]*(fields[2,i-1]+fields[3,i-1])
     get_outlet_bc(fluxes, fields)

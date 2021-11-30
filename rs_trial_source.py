@@ -11,4 +11,4 @@ def add_source(res, alpha, d, fields, R, T_wall):
     #calculate source term
     #input:
     #output: (4xN) array with added source term, passed by reference
-    res[2,:]-=alpha*4/d*(fields[3,:]/(fields[0,:]*R)-T_wall[:])
+    res[2,:]= -alpha*4/d*(fields[3,:]/(fields[0,:]*R)-T_wall[:])

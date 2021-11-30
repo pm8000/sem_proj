@@ -23,4 +23,6 @@ def get_cs(p, rho, gamma=1.4):
     #calculate speed of sound
     #input: scalars isentropic coefficient gamma, pressure p, density rho
     #output: scalar speed of sound
+    if p/rho<0:
+        assert(False)
     return np.sqrt(gamma*p/rho)

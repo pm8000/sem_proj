@@ -17,7 +17,7 @@ dx=0.01 #grid density
 N=math.ceil(L/dx) #number of cells
 d=0.1 #pipe diameter
 
-t_end=1e-1 #end time
+t_end=1 #end time
 cfl=0.5 #cfl number to define time step
 
 alpha=200 #convection heat transfer coefficient
@@ -40,6 +40,7 @@ fluxes=np.zeros([3, N+1]) #0 stores density flux, 1 stores momentum flux, 2 stor
 T_wall=np.zeros(N)
 T_wall[:]=20+273
 T=np.zeros(N)
+T[:]=T_amb
 source=np.zeros([3,N])
 
 #initialise fields
@@ -53,15 +54,13 @@ fields[3,:]=p_amb
 cs_max=eos.get_cs(p_inlet, rho_inlet)
 dt=cfl*dx/cs_max
 nt=math.ceil(t_end/dt)
-p=[]
-T_list=[]
-density=[]
+first_point=np.zeros([5,1752])
+tot_mom=0
 
-for i in range(nt):
-    T[:]=fields[3,:]/(fields[0,:]*R)
-    if i%200==0:
-        plt.plot(np.linspace(0.005,0.995,100),fields[1,:], label='t='+str(i*dt)+' s')
-    T_list.append(T[0])
+for i in range(1752):
+ 
+    #if i%200==0:
+    #    plt.plot(np.linspace(0.005,0.995,100),fields[1,:], label='t='+str(i*dt)+' s')
     #print(T_list)
     if i==2000:
         eos.get_E(rho_inlet, u_inlet, p_inlet)
@@ -79,6 +78,39 @@ for i in range(nt):
     prt_2=dt/dx*(fluxes[2,0]-fluxes[2,1])
     fields[:-1,:]+=(dt/dx*(fluxes[:,:-1]-fluxes[:,1:])+dt*source[:,:])
     fields[3,:]=eos.get_p(fields[0,:], fields[1,:]/fields[0,:], fields[2,:])
-plt.legend()
-plt.show()
+    T[:]=fields[3,:]/(fields[0,:]*R)
+    
+    tot_mom+=fluxes[1,0]-fluxes[1,1]
+    first_point[0,i]=fields[0,0]
+    first_point[1,i]=fields[1,0]
+    first_point[2,i]=fields[2,0]
+    first_point[3,i]=fields[3,0]
+    first_point[4,i]=T[0]    
 
+plt.plot(first_point[0,:], label='source')
+plt.title('density')
+plt.savefig('first_cell_density_supers')
+plt.clf()
+plt.plot(first_point[1,:], label='flux difference')
+plt.title('velocity')
+plt.savefig('first_cell_velocity_supers')
+#plt.legend()
+#plt.show()
+plt.clf()
+"""
+print("density influx", inlet_flux[0])
+print("momentum influx", inlet_flux[1])
+print("energy influx", inlet_flux[2])
+"""
+plt.plot(first_point[2,:])
+plt.title('energy flux')
+plt.savefig('first_cell_energy_supers')
+plt.clf()
+plt.plot(first_point[3,:])
+plt.title('pressure')
+plt.savefig('first_cell_pressure_supers')
+plt.clf()
+plt.plot(first_point[4,:])
+plt.title('temperature')
+plt.savefig('first_cell_temperature_supers')
+plt.clf()

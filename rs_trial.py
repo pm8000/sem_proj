@@ -39,7 +39,6 @@ fields=np.zeros([4,N]) #0 stores density, 1 stores momentum, 2 stores energy, 3 
 fluxes=np.zeros([3, N+1]) #0 stores density flux, 1 stores momentum flux, 2 stores energy flux
 T_wall=np.zeros(N)
 T_wall[:]=20+273
-T=np.zeros(N)
 source=np.zeros([3,N])
 
 #initialise fields
@@ -53,19 +52,9 @@ fields[3,:]=p_amb
 cs_max=eos.get_cs(p_inlet, rho_inlet)
 dt=cfl*dx/cs_max
 nt=math.ceil(t_end/dt)
-p=[]
-T_list=[]
-density=[]
+
 
 for i in range(nt):
-    T[:]=fields[3,:]/(fields[0,:]*R)
-    if i%200==0:
-        plt.plot(np.linspace(0.005,0.995,100),fields[1,:], label='t='+str(i*dt)+' s')
-    T_list.append(T[0])
-    #print(T_list)
-    if i==2000:
-        eos.get_E(rho_inlet, u_inlet, p_inlet)
-    print("step",i)
     if (i+1)*dt>t_end:
         dt=t_end-i*dt
 
@@ -75,10 +64,6 @@ for i in range(nt):
     #add source
     src.add_source(source, alpha, d, fields, R, T_wall)
     #integrate with euler explicit
-    prt_1=dt*source[2,0]
-    prt_2=dt/dx*(fluxes[2,0]-fluxes[2,1])
     fields[:-1,:]+=(dt/dx*(fluxes[:,:-1]-fluxes[:,1:])+dt*source[:,:])
     fields[3,:]=eos.get_p(fields[0,:], fields[1,:]/fields[0,:], fields[2,:])
-plt.legend()
-plt.show()
 

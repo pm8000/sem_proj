@@ -36,11 +36,13 @@ def get_middle_state(fields, i, inlet=[0,0,0], border=0):
         rho_l=fields[0,i-1]+0.5*minmod(fields[0, i-1], fields[0,i], 2*inlet[0]-fields[0,i-1])
         u_l=fields[1,i-1]/fields[0, i-1]+0.5*minmod(fields[1,i-1]/fields[0,i-1], fields[1,i]/fields[0,i], 2*inlet[1]-fields[1,i-1]/fields[0,i-1])
         p_l=fields[3,i-1]+0.5*minmod(fields[3, i-1], fields[3,i], 2*inlet[2]-fields[3,i-1])
+
     else:
         rho_l=fields[0, i-1]+0.5*minmod(fields[0,i-1], fields[0,i], fields[0,i-2])
         u_l=fields[1,i-1]/fields[0,i-1]+0.5*minmod(fields[1,i-1]/fields[0,i-1], fields[1,i]/fields[0,i], fields[1,i-2]/fields[0,i-1])
         p_l=fields[3,i-1]+0.5*minmod(fields[3,i-1], fields[3,i], fields[3,i-2])
     if rho_l<0 or pd.isna(rho_l)==True:
+        print("density is negative or not a number")
         assert(False)
     cs_l=eos.get_cs(p_l, rho_l)
     

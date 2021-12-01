@@ -17,7 +17,7 @@ dx=0.01 #grid density
 N=math.ceil(L/dx) #number of cells
 d=0.1 #pipe diameter
 
-t_end=1e-1 #end time
+t_end=2e-1 #end time
 cfl=0.5 #cfl number to define time step
 
 alpha=200 #convection heat transfer coefficient
@@ -44,8 +44,8 @@ source=np.zeros([3,N])
 #initialise fields
 
 fields[0,:]=p_amb/(R*T_amb)
-fields[1,:]=fields[0,:]*u_inlet
-fields[2,:]=eos.get_E(rho_amb, u_inlet, p_amb, gamma)
+#fields[1,:]=fields[0,:]*u_inlet
+fields[2,:]=eos.get_E(rho_amb, fields[1,:]/rho_amb, p_amb, gamma)
 fields[3,:]=p_amb
 
 #determine time step
@@ -55,6 +55,7 @@ nt=math.ceil(t_end/dt)
 
 
 for i in range(nt):
+
     if (i+1)*dt>t_end:
         dt=t_end-i*dt
 
@@ -66,4 +67,3 @@ for i in range(nt):
     #integrate with euler explicit
     fields[:-1,:]+=(dt/dx*(fluxes[:,:-1]-fluxes[:,1:])+dt*source[:,:])
     fields[3,:]=eos.get_p(fields[0,:], fields[1,:]/fields[0,:], fields[2,:])
-

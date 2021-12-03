@@ -1,1 +1,4 @@
-This branch a copy of the rs branch, but can be modified to plot or print anything desired.
+
+A clean version of the solver to get started with.
+Modification in print statements and similar shall be commited to the rs_trial branch.
+

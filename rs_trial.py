@@ -20,14 +20,15 @@ dx=0.01 #grid density
 N=math.ceil(L/dx) #number of cells
 d=0.1 #pipe diameter
 
-t_end=2.6e-1 #end time
+t_end=0.3  #end time
 cfl=0.5 #cfl number to define time step
 
 alpha=200 #convection heat transfer coefficient
+nu=15e-6 #kinematic viscosity
 gamma=1.4
 R=287.058
 T_inlet=200+273
-T_amb=273+20
+T_amb=20+273
 p_amb=1e5
 u_inlet=10
 p_inlet=1*p_amb
@@ -37,9 +38,9 @@ rho_amb=p_amb/(R*T_amb)
 
 inlet=np.array([rho_inlet,u_inlet,p_inlet])
 inlet_flux=flux.calc_inlet_bc(rho_inlet, u_inlet, p_inlet)
-print(eos.get_E(rho_inlet, u_inlet, p_inlet))
+#print(eos.get_E(rho_inlet, u_inlet, p_inlet))
 
-fields=np.zeros([5,N]) #0 stores density, 1 stores momentum, 2 stores energy, 3 stores pressure
+fields=np.zeros([5, N]) #0 stores density, 1 stores momentum, 2 stores energy, 3 stores pressure
 fluxes=np.zeros([3, N+1]) #0 stores density flux, 1 stores momentum flux, 2 stores energy flux
 T_wall=np.zeros(N)
 T_wall[:]=20+273
@@ -60,7 +61,7 @@ cs_max=eos.get_cs(p_inlet, rho_inlet)
 dt=cfl*dx/cs_max
 nt=math.ceil(t_end/dt)
 E_correction=E_loss*dx/dt
-first_point=np.zeros([5,1])
+first_point=np.zeros([6,26160])
 #E_tot=np.sum(fields[2,:])
 #E_tot_hist=np.zeros(nt+1)
 #E_tot_hist[0]=E_tot
@@ -70,10 +71,10 @@ first_point=np.zeros([5,1])
 #src_sum=np.zeros(22672)
 start=time.time()
 for i in range(nt):
-    #if i%2e3==0:
-    #    plt.plot(np.linspace(0.005,0.995,100),source[2,:], label='t='+str(i*dt)+' s')
-    #print(T_list)
-    if i%2000==0:
+    #if i%2.6e3==0:
+    #    plt.plot(np.linspace(0.005,0.995,100),fields[3,:], label='t='+str(i*dt)+' s')
+    # print(T_list)
+    if i%2e3==0:
         print("step",i)
     if (i+1)*dt>t_end:
         dt=t_end-i*dt
@@ -82,7 +83,8 @@ for i in range(nt):
     #BC are added in the same step
     flux.update_fluxes(fluxes, fields, inlet_flux, inlet, E_correction)
     #add source
-    src.add_source(source, alpha, d, fields, R, T_wall)
+    src.add_momentum_source_2(source, fields, d, dx, nu)
+    src.add_energy_source(source, alpha, d, fields, R, T_wall)
     #src_sum[i]=np.sum(source[2,:])*dt
     #plt.plot(np.linspace(0,1,101),fluxes[0,:], label='rho*u')
     #plt.plot(np.linspace(0,1,101),fluxes[1,:], label='rho*u*u+p')
@@ -100,31 +102,32 @@ for i in range(nt):
     #dE_hist[i]=E_tot_hist[i+1]-E_tot_hist[i]
     #E_flow[i]=(fluxes[2,0]-fluxes[2,-1])*dt/dx
     
-    #first_point[0,i]=fields[0,0]
-    #first_point[1,i]=fields[1,0]
-    #first_point[2,i]=fields[2,0]
-    #first_point[3,i]=fields[3,0]
-    #first_point[4,i]=T[0]
+    first_point[0,i]=fields[0,20]
+    first_point[1,i]=fields[1,20]
+    first_point[2,i]=fields[2,20]
+    first_point[3,i]=fields[3,20]
+    first_point[4,i]=fields[4,20]
+    first_point[5,i]=T[20]
     
-print("time "+str(time.time()-start))
-print(E_tot_hist[1:].shape)
+print("time "+str(time.time()-start)+" sec")
 #plt.plot(t,src_sum, label='src')
 #plt.plot(t,dE_hist, label='dE')
 #plt.plot(t, E_flow[:], label='net flux')
 #plt.plot(t, E_flow[:]+src_sum[:], label='sum' )
-#plt.plot(E_tot_hist)
-#plt.legend(bbox_to_anchor=(1.01,1),loc='upper left', borderaxespad=0)
-#plt.show()
+#plt.plot(first_point[3,:])
+plt.title('Pressure')
+plt.legend(bbox_to_anchor=(1.01,1),loc='upper left', borderaxespad=0)
+plt.show()
+#plt.clf()
 """
-plt.plot(t, first_point[3,:], label='source')
-plt.title('pressure')
+plt.plot(first_point[0,:])
+plt.title('density')
 #plt.show()
-plt.savefig('first_cell_density_supers')
+plt.savefig('first_cell_density_slow_2')
 plt.clf()
-
-plt.plot(first_point[1,:], label='flux difference')
-plt.title('velocity')
-plt.savefig('first_cell_velocity_supers')
+plt.plot(first_point[1,:], label='momentum')
+plt.title('momentum')
+plt.savefig('first_cell_momentum_slow_2')
 #plt.legend()
 #plt.show()
 plt.clf()
@@ -134,15 +137,22 @@ print("momentum influx", inlet_flux[1])
 print("energy influx", inlet_flux[2])
 
 plt.plot(first_point[2,:])
-plt.title('energy flux')
-plt.savefig('first_cell_energy_supers')
+plt.title('energy')
+plt.savefig('first_cell_energy_slow_2')
+"""
 plt.clf()
 plt.plot(first_point[3,:])
 plt.title('pressure')
-plt.savefig('first_cell_pressure_supers')
+plt.show()
+#plt.savefig('first_cell_pressure_slow_2')
+"""
 plt.clf()
 plt.plot(first_point[4,:])
+plt.title('velocity')
+plt.savefig('first_cell_velocity_slow_2')
+plt.clf()
+plt.plot(first_point[5,:])
 plt.title('temperature')
-plt.savefig('first_cell_temperature_supers')
+plt.savefig('first_cell_temperature_slow_2')
 plt.clf()
 """

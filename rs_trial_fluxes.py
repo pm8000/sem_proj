@@ -57,7 +57,7 @@ def get_border_values(fields, i, inlet=[0,0,0], border=0):
         #construct ghost cell to the left to achieve desired flux
         rho_l=fields[0,i-1]+0.5*minmod(fields[0, i-1], fields[0,i], 2*inlet[0]-fields[0,i-1])
         u_l=fields[1,i-1]/fields[0, i-1]+0.5*minmod(fields[1,i-1]/fields[0,i-1], fields[1,i]/fields[0,i], 2*inlet[1]-fields[1,i-1]/fields[0,i-1])
-        p_l=fields[3,i-1]+0.5*minmod(fields[3, i-1], fields[3,i], 2*inlet[2]-fields[3,i-1])
+        p_l=fields[3,i-1]+0.5*minmod(fields[3, i-1], fields[3,i], 2*fields[3,0]-fields[3,i-1])
 
     else:
         rho_l=fields[0, i-1]+0.5*minmod(fields[0,i-1], fields[0,i], fields[0,i-2])
@@ -99,11 +99,18 @@ def no_outlet(fluxes, fields, E_correction=0):
 def get_outlet_bc_p_driven(fluxes, fields, E_correction=0, last_state=[0]):
     p_outlet=10e4
     T_outlet=fields[3,-1]/(287*fields[0,-1])
-    rho_outlet=p_outlet/(287*T_outlet)
+    rho_outlet=p_outlet/(287.058*T_outlet)
     u_outlet=fields[1,-1]/rho_outlet
     #u_outlet=0
     rho, u, p, E=get_middle_state(fields[1,-1]/fields[0,-1], fields[0,-1], fields[3,-1], u_outlet, rho_outlet, p_outlet)
-    #print('rho', rho, 'u', u, 'p', p, 'E',E)
+    """
+    print('left')
+    print('rho', fields[0,-1], 'u', fields[1,-1]/fields[0,-1], 'p', fields[3,-1])
+    print('right')
+    print('rho', rho_outlet, 'u', u_outlet, 'p', p_outlet)
+    print('middle')
+    print('rho', rho, 'u', u, 'p', p)
+    """
     fluxes[0,-1]=rho*u
     fluxes[1,-1]=rho*u*u+p
     fluxes[2,-1]=u*(E+p)
@@ -140,7 +147,7 @@ def get_inflow_bc_p_driven(fluxes, inlet, fields):
     #fix inlet pressure (only makes sense for pressure higher than ambient)
     #input: (3xN+1) array to write inlet fluxes to, (1x3) vector containing fluxes
     #output: inlet fluxes added to fluxes in the first column, passed by reference
-    rho, u, p, E=get_middle_state(0, inlet[0], inlet[2], fields[1,0]/fields[0,0], fields[0,0], fields[3,0])
+    rho, u, p, E=get_middle_state(inlet[1], fields[3,0]/(287.058*473), fields[3,0], fields[1,0]/fields[0,0], fields[0,0], fields[3,0])
     fluxes[0,0]=rho*u
     fluxes[1,0]=rho*u*u+p
     fluxes[2,0]=u*(E+p)
@@ -154,7 +161,7 @@ def update_fluxes(fluxes, fields, inlet_flux, inlet, E_correction=0, last_state=
     #output: (3xN+1) array with updated fluxes, passed by reference
     
     #inlet BC
-    get_inflow_bc(fluxes, inlet_flux, fields)
+    get_inflow_bc_p_driven(fluxes, inlet, fields)
     
     for i in range(1, fluxes.shape[1]-1):
         if i==1:

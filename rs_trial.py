@@ -43,7 +43,7 @@ inlet_flux=flux.calc_inlet_bc(rho_inlet, u_inlet, p_inlet)
 
 fields=np.zeros([5, N]) #0 stores density, 1 stores momentum, 2 stores energy, 3 stores pressure
 fluxes=np.zeros([3, N+1]) #0 stores density flux, 1 stores momentum flux, 2 stores energy flux
-T_wall=np.linspace(273,473,N)
+T_wall=np.linspace(473,273,N)
 #T_wall[:]=273
 T=np.zeros(N)
 T[:]=T_wall[:]
@@ -140,7 +140,7 @@ anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,1],'
 anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,2],'energy_evolution_T_grad.gif',249500,250500,animation_time)
 anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,3],'pressure_evolution_T_grad.gif',99930,100020,animation_time)
 anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,4],'velocity_evolution_T_grad.gif',7,10.5,animation_time)
-anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,5],'temperature_evolution_T_grad.gif',0.7,1.3,animation_time)
+anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,5],'temperature_evolution_T_grad.gif',270,475,animation_time)
 
 plt.title('Pressure')
 for i in range(p_evolution.shape[0]):

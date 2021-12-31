@@ -20,8 +20,30 @@ def minmod(u, u_p, u_m):
         return 0
     return np.sign(d1)*min(abs(d1),abs(d2))
 
-def get_middle_state(fields, i, inlet=[0,0,0], border=0):
-    #calculate the values at cell interface assuming linearised problem at boundary and use linear profile within cell limited by minmod
+def get_middle_state(u_l, rho_l, p_l, u_r, rho_r, p_r):
+    #calculate middle state based on characteristics of left and right state:
+    #inputs:left and right state (all scalar values)
+    #output: middle state (tuple of scalar values)
+    cs_l=eos.get_cs(p_l, rho_l)
+    cs_r=eos.get_cs(p_r, rho_r)
+    
+    if u_l>cs_l:
+        print("supersonic velocity encountered")
+        u_m=u_l
+        p_m=p_l
+        rho_m=rho_l
+    else:
+        u_m=(rho_l*u_l*cs_l+rho_r*u_r*cs_r+p_l-p_r)/(rho_l*cs_l+rho_r*cs_r)
+        p_m=p_l-rho_l*cs_l*(u_m-u_l)
+        if u_l+u_r>=0:
+            rho_m=(p_m-p_l)/(cs_l*cs_l)+rho_l
+        else:
+            rho_m=(p_m-p_r)/(cs_r*cs_r)+rho_r
+    E_m=eos.get_E(rho_m, u_m, p_m)
+    return (rho_m, u_m, p_m, E_m)
+
+def get_border_values(fields, i, inlet=[0,0,0], border=0):
+    #calculate the values at cell interface assuming linear profile within cell limited by minmod
     #input: (4xN) array with stored values of density, velocity and pressure, integer i to denote index,
     #       vector of length 3, containing (in this order) inlet density, velocity and pressure, only required if i==1
     #       parameter border, set to 1 if left cell is boundry cell, -1 if right cell is boundary cell
@@ -35,7 +57,7 @@ def get_middle_state(fields, i, inlet=[0,0,0], border=0):
         #construct ghost cell to the left to achieve desired flux
         rho_l=fields[0,i-1]+0.5*minmod(fields[0, i-1], fields[0,i], 2*inlet[0]-fields[0,i-1])
         u_l=fields[1,i-1]/fields[0, i-1]+0.5*minmod(fields[1,i-1]/fields[0,i-1], fields[1,i]/fields[0,i], 2*inlet[1]-fields[1,i-1]/fields[0,i-1])
-        p_l=fields[3,i-1]+0.5*minmod(fields[3, i-1], fields[3,i], 2*inlet[2]-fields[3,i-1])
+        p_l=fields[3,i-1]+0.5*minmod(fields[3, i-1], fields[3,i], 2*fields[3,0]-fields[3,i-1])
 
     else:
         rho_l=fields[0, i-1]+0.5*minmod(fields[0,i-1], fields[0,i], fields[0,i-2])
@@ -44,7 +66,6 @@ def get_middle_state(fields, i, inlet=[0,0,0], border=0):
     if rho_l<0 or pd.isna(rho_l)==True:
         print("density is negative or not a number")
         assert(False)
-    cs_l=eos.get_cs(p_l, rho_l)
     
     if border==-1:
         #on right border there is zero gradient BC, hence minmod would return 0 slope
@@ -55,27 +76,10 @@ def get_middle_state(fields, i, inlet=[0,0,0], border=0):
         rho_r=fields[0,i]+0.5*minmod(fields[0,i], fields[0,i+1], fields[0,i-1])
         u_r=fields[1,i]/fields[0,i]+0.5*minmod(fields[1,i]/fields[0,i], fields[1,i+1]/fields[0,i+1], fields[1,i-1]/fields[0,i-1])
         p_r=fields[3,i]+0.5*minmod(fields[0,i], fields[3,i+1], fields[3,i-1])
-    cs_r=eos.get_cs(p_r, rho_r)
         
-    #compute middle state with linearised characteristics
-    
-    if u_l>cs_l:
-        print("cell", i, "is supersonic")
-        u_m=u_l
-        p_m=p_l
-        rho_m=rho_l
-    else:
-        u_m=(rho_l*u_l*cs_l+rho_r*u_r*cs_r+p_l-p_r)/(rho_l*cs_l+rho_r*cs_r)
-        p_m=p_l-rho_l*cs_l*(u_m-u_l)
-        if u_l+u_r>=0:
-            rho_m=(p_m-p_l)/(cs_l*cs_l)+rho_l
-        else:
-            rho_m=(p_m-p_r)/(cs_r*cs_r)+rho_r
-    E_m=eos.get_E(rho_m, u_m, p_m)
+    return(get_middle_state(u_l, rho_l, p_l, u_r, rho_r, p_r))
 
-    return (rho_m, u_m, p_m, E_m)
-
-def get_outlet_bc(fluxes, fields):
+def zero_gradient_outlet_bc(fluxes, fields, E_correction=0):
     #calculate outflow flux based on zero gradient
     #input: (4xN) array fields with stored values of density, momentum, energy and pressure, (3xN+1) array fluxes to write fluxes to
     #output:(3xN+1) array with updated fluxes, passed by reference
@@ -84,13 +88,42 @@ def get_outlet_bc(fluxes, fields):
     fluxes[1,-1]=fields[1,-1]**2/fields[0,-1]+fields[3,-1]
     fluxes[2,-1]=fields[1,-1]/fields[0,-1]*(fields[2,-1]+fields[3,-1])
     
-def no_outlet(fluxes, fields):
+def no_outlet(fluxes, fields, E_correction=0):
     #close pipe and restrict outflow
     #input: (4xN) array fields with stored values of density, momentum, energy and pressure, (3xN+1) array fluxes to write fluxes to
     #output:(3xN+1) array with updated fluxes, passed by reference
     fluxes[0,-1]=0
     fluxes[1,-1]=eos.get_p(fields[0,-1], fields[1,-1]/fields[0,-1], fields[2,-1])
     fluxes[2,-1]=0
+    
+def get_outlet_bc_p_driven(fluxes, fields, E_correction=0, last_state=[0]):
+    p_outlet=10e4
+    T_outlet=fields[3,-1]/(287*fields[0,-1])
+    rho_outlet=p_outlet/(287.058*T_outlet)
+    u_outlet=fields[1,-1]/rho_outlet
+    #u_outlet=0
+    rho, u, p, E=get_middle_state(fields[1,-1]/fields[0,-1], fields[0,-1], fields[3,-1], u_outlet, rho_outlet, p_outlet)
+    """
+    print('left')
+    print('rho', fields[0,-1], 'u', fields[1,-1]/fields[0,-1], 'p', fields[3,-1])
+    print('right')
+    print('rho', rho_outlet, 'u', u_outlet, 'p', p_outlet)
+    print('middle')
+    print('rho', rho, 'u', u, 'p', p)
+    """
+    fluxes[0,-1]=rho*u
+    fluxes[1,-1]=rho*u*u+p
+    fluxes[2,-1]=u*(E+p)
+    if len(last_state)>=2:
+        last_state[0]=rho
+        last_state[1]=u
+        last_state[2]=p
+        last_state[3]=E
+    
+def energy_optimised_outlet_bc(fluxes, fields, E_correction):
+    fluxes[0,-1]=fields[1,-1]
+    fluxes[1,-1]=fields[1,-1]**2/fields[0,-1]+fields[3,-1]
+    fluxes[2,-1]=max(0,fields[1,-1]/fields[0,-1]*(fields[2,-1]+fields[3,-1])-E_correction)
     
 def calc_inlet_bc(rho, u, p):
     #calculate inlet fluxes given by BC. Fluxes are assumed to be constant, hence only one evaluation is required
@@ -109,8 +142,18 @@ def get_inflow_bc(fluxes, inlet, fields):
     fluxes[0,0]=inlet[0]
     fluxes[1,0]=inlet[1]+fields[3,0]
     fluxes[2,0]=inlet[2]
+    
+def get_inflow_bc_p_driven(fluxes, inlet, fields):
+    #fix inlet pressure (only makes sense for pressure higher than ambient)
+    #input: (3xN+1) array to write inlet fluxes to, (1x3) vector containing fluxes
+    #output: inlet fluxes added to fluxes in the first column, passed by reference
+    rho, u, p, E=get_middle_state(inlet[1], fields[3,0]/(287.058*473), fields[3,0], fields[1,0]/fields[0,0], fields[0,0], fields[3,0])
+    fluxes[0,0]=rho*u
+    fluxes[1,0]=rho*u*u+p
+    fluxes[2,0]=u*(E+p)
+
             
-def update_fluxes(fluxes, fields, inlet_flux, inlet):
+def update_fluxes(fluxes, fields, inlet_flux, inlet, E_correction=0, last_state=[0]):
     #calculate fluxes at cell interfaces, assuming Riemann problems at cell boundaries
     #input: (4xN) array fields with stored values of density, momentum, energy and pressure, (3xN+1) array fluxes to write fluxes to
     #       vector of length 3 (inlet_flux) containing inlet fluxes
@@ -118,25 +161,25 @@ def update_fluxes(fluxes, fields, inlet_flux, inlet):
     #output: (3xN+1) array with updated fluxes, passed by reference
     
     #inlet BC
-    get_inflow_bc(fluxes, inlet_flux, fields)
+    get_inflow_bc_p_driven(fluxes, inlet, fields)
     
     for i in range(1, fluxes.shape[1]-1):
         if i==1:
-            rho_m, u_m, p_m, E_m=get_middle_state(fields, i, inlet=inlet, border=1)
+            rho_m, u_m, p_m, E_m=get_border_values(fields, i, inlet=inlet, border=1)
         elif i==fluxes.shape[1]-2:
-            rho_m, u_m, p_m, E_m=get_middle_state(fields, i, border=-1)
+            rho_m, u_m, p_m, E_m=get_border_values(fields, i, border=-1)
         else:
-            rho_m, u_m, p_m, E_m=get_middle_state(fields, i)
+            rho_m, u_m, p_m, E_m=get_border_values(fields, i)
         fluxes[0,i]=rho_m*u_m
         fluxes[1,i]=rho_m*u_m*u_m+p_m
         fluxes[2,i]=u_m*(E_m+p_m)
     
     #outlet BC
-    get_outlet_bc(fluxes, fields)
+    get_outlet_bc_p_driven(fluxes, fields, E_correction, last_state)
     
-def update_fluxes_upwind(fluxes, fields, inlet_flux, inlet):
+def update_fluxes_upwind(fluxes, fields, inlet_flux, inlet, E_correction=0):
     #calculate flux at cell interface based on upwind scheme
-    get_inflow_bc(fluxes, inlet_flux)
+    get_inflow_bc(fluxes, inlet_flux, fields)
     for i in range(1, fluxes.shape[1]-1):
         if fields[0,i]<0 or fields[2,i]<0 or fields[3,i]<0:
             assert(False)
@@ -148,4 +191,4 @@ def update_fluxes_upwind(fluxes, fields, inlet_flux, inlet):
             fluxes[0,i]=fields[1,i-1]
             fluxes[1,i]=fields[1,i-1]**2/fields[0,i-1]+fields[3,i-1]
             fluxes[2,i]=fields[1,i-1]/fields[0,i-1]*(fields[2,i-1]+fields[3,i-1])
-    get_outlet_bc(fluxes, fields)
+    zero_gradient_outlet_bc(fluxes, fields)

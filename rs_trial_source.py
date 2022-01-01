@@ -5,13 +5,13 @@ Created on Fri Nov 26 14:01:56 2021
 
 @author: pascal
 """
+import CoolProp.CoolProp as CP
 
-
-def add_energy_source(res, alpha, d, fields, R, T_wall):
+def add_energy_source(res, alpha, d, fields, R, T_wall, fluid='Air'):
     #calculate source termsource
     #input:
     #output: (4xN) array with added  term, passed by reference
-    res[2,:]= -alpha*4/d*(fields[3,:]/(fields[0,:]*R)-T_wall[:])
+    res[2,:]= -alpha*4/d*(CP.PropsSI('T', 'D', fields[0,:], 'P', fields[3,:], fluid)-T_wall[:])
     
 def add_momentum_source(res, fields, d, dx, nu):
     #calculate pipe resistance

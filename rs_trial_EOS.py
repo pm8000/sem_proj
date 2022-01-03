@@ -8,7 +8,7 @@ Created on Fri Nov 26 09:58:26 2021
 import numpy as np
 import CoolProp.CoolProp as CP
 
-def get_E(rho, u, p, fluid='Air'):
+def get_E(rho, u, p, fluid):
     #calculate energy based on ideal gas EOS
     #input: scalars density rho, velocity u, presure p, isentropic coefficient gamma
     #output: scalar energy E
@@ -19,7 +19,7 @@ def get_e(rho, u, E):
     
     return (E/rho-0.5*u*u)
 
-def get_p(rho, u, E, fluid='Air'):
+def get_p(rho, u, E, fluid):
 
     e=get_e(rho, u, E)    
     return CP.PropsSI('P', 'D', rho, 'Umass', e, fluid)
@@ -33,7 +33,7 @@ def get_cs(p, rho, gamma=1.4):
         assert(False)
     return np.sqrt(gamma*p/rho)
 
-def get_chi(p,rho, fluid='Air', distance=0.01):
+def get_chi(p,rho, fluid, distance=0.01):
     #calculate speed of acoustic waves
     #input: scalars density rho and pressure p, string fluid (must be parsable for CoolProp), distance to adjust derrivative
     #output: scalar acoustic waves

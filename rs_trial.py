@@ -23,11 +23,11 @@ dx=0.01 #grid density
 N=math.ceil(L/dx) #number of cells
 d=0.1 #pipe diameter
 
-t_end=0.1  #end time
+t_end=0.3  #end time
 cfl=0.5 #cfl number to define time step
 
 alpha=200 #convection heat transfer coefficient
-fluid='Air'
+fluid='Water'
 nu=15e-6 #kinematic viscosity
 gamma=1.4
 R=287.058
@@ -40,16 +40,17 @@ E_loss=0
 rho_inlet=CP.PropsSI('D', 'T',T_inlet, 'P',p_inlet,fluid)
 
 inlet=np.array([rho_inlet,u_inlet,p_inlet,T_inlet])
-inlet_flux=flux.calc_inlet_bc(rho_inlet, u_inlet, p_inlet)
+inlet_flux=flux.calc_inlet_bc(rho_inlet, u_inlet, p_inlet, fluid)
 #print(eos.get_E(rho_inlet, u_inlet, p_inlet))
 
 fields=np.zeros([5, N]) #0 stores density, 1 stores momentum, 2 stores energy, 3 stores pressure
 fluxes=np.zeros([3, N+1]) #0 stores density flux, 1 stores momentum flux, 2 stores energy flux
 #T_wall=np.linspace(473,273,N)
 T_wall=np.zeros(N)
-T_wall[:]=273
+T_wall[:]=373
 T=np.zeros(N)
 T[:]=T_wall[:]
+T[:]=375
 source=np.zeros([3,N])
 
 #initialise fields
@@ -61,7 +62,7 @@ fields[3,:]=p_amb
 fields[4,:]=fields[1,:]/fields[0,:]
 
 #determine time step
-upper_chi_est=eos.get_chi(p_inlet, rho_inlet) #chi is most likely largest at high temperature
+upper_chi_est=eos.get_chi(p_inlet, rho_inlet, fluid) #chi is most likely largest at high temperature
 dt=cfl*dx/upper_chi_est #maybe consider adaptive time step
 nt=math.ceil(t_end/dt)
 E_correction=E_loss*dx/dt
@@ -96,9 +97,9 @@ for i in range(nt):
     #compute fluxes
     #BC are added in the same step
     if i==15e3:
-        flux.update_fluxes(fluxes, fields, inlet_flux, inlet, E_correction, fluid, last_state)
+        flux.update_fluxes(fluxes, fields, inlet_flux, inlet, fluid, E_correction, last_state)
     else:
-        flux.update_fluxes(fluxes, fields, inlet_flux, inlet, E_correction, fluid)
+        flux.update_fluxes(fluxes, fields, inlet_flux, inlet, fluid, E_correction)
     #add source
     #src.add_momentum_source_2(source, fields, d, dx, nu)
     src.add_energy_source(source, alpha, d, fields, R, T_wall, fluid)
@@ -110,7 +111,7 @@ for i in range(nt):
     #plt.show()
     #integrate with euler explicit
     fields[:3,:]+=(dt/dx*(fluxes[:,:-1]-fluxes[:,1:])+dt*source[:,:])
-    fields[3,:]=eos.get_p(fields[0,:], fields[1,:]/fields[0,:], fields[2,:])
+    fields[3,:]=eos.get_p(fields[0,:], fields[1,:]/fields[0,:], fields[2,:], fluid)
     T[:]=CP.PropsSI('T', 'P', fields[3,:], 'D', fields[0,:], fluid)
     fields[4,:]=fields[1,:]/fields[0,:]
     #E_tot=np.sum(fields[2,:])
@@ -138,12 +139,12 @@ print("time "+str(time.time()-start)+" sec")
 #plt.plot(t, E_flow[:]+src_sum[:], label='sum' )
 #plt.plot(first_point[3,:])
 
-anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,0],'density_evolution_T_grad.gif',0.7,1.3,animation_time)
-anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,1],'momentum_evolution_T_grad.gif',7,13,animation_time)
-anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,2],'energy_evolution_T_grad.gif',249500,250500,animation_time)
-anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,3],'pressure_evolution_T_grad.gif',99930,100020,animation_time)
-anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,4],'velocity_evolution_T_grad.gif',7,10.5,animation_time)
-anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,5],'temperature_evolution_T_grad.gif',270,475,animation_time)
+anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,0],'density_evolution_w_long.gif',0.7,1.3,animation_time)
+anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,1],'momentum_evolution_w_long.gif',7,13,animation_time)
+anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,2],'energy_evolution_w_long.gif',249500,250500,animation_time)
+anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,3],'pressure_evolution_w_long.gif',99930,100020,animation_time)
+anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,4],'velocity_evolution_w_long.gif',7,10.5,animation_time)
+anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,5],'temperature_evolution_w_long.gif',370,475,animation_time)
 
 plt.title('Pressure')
 for i in range(p_evolution.shape[0]):

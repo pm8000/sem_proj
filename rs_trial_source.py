@@ -7,7 +7,7 @@ Created on Fri Nov 26 14:01:56 2021
 """
 import CoolProp.CoolProp as CP
 
-def add_energy_source(res, alpha, d, fields, R, T_wall, fluid='Air'):
+def add_energy_source(res, alpha, d, fields, R, T_wall, fluid):
     #calculate source termsource
     #input:
     #output: (4xN) array with added  term, passed by reference

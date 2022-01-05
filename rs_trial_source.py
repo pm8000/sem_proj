@@ -5,13 +5,26 @@ Created on Fri Nov 26 14:01:56 2021
 
 @author: pascal
 """
+import numpy as np
 import CoolProp.CoolProp as CP
 
-def add_energy_source(res, alpha, d, fields, R, T_wall, fluid):
+def get_alpha(T_boil, T, tol=1):
+    alpha=np.zeros(T.size)
+    for i in range(T.size):
+        if T[i]>T_boil+0.5*tol:
+            alpha[i]=200
+        elif T[i]<T_boil-0.5*tol:
+            alpha[i]=2000
+        else:
+            alpha[i]=2300
+    return alpha
+
+def add_energy_source(res, T_boil, d, fields, R, T_wall, fluid):
     #calculate source termsource
     #input:
     #output: (4xN) array with added  term, passed by reference
-    res[2,:]= -alpha*4/d*(CP.PropsSI('T', 'D', fields[0,:], 'P', fields[3,:], fluid)-T_wall[:])
+    alpha=get_alpha(T_boil, fields[4,:])
+    res[2,:]= -alpha[:]*4/d*(fields[4,:]-T_wall[:])
     
 def add_momentum_source(res, fields, d, dx, nu):
     #calculate pipe resistance

@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 def create_animation(i, x, u, y_min,y_max,t):
     plt.cla()
     plt.xlim(0,1)
-    #plt.ylim(y_min,y_max)
+    plt.ylim(y_min,y_max)
     plt.plot(x,u[i,:],label=t[i])
     plt.legend()
     

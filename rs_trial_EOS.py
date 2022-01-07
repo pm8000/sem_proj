@@ -6,18 +6,25 @@ Created on Fri Nov 26 09:58:26 2021
 @author: pascal
 """
 import numpy as np
+import CoolProp.CoolProp as CP
+from fits.rs_trial_dedrho_table import get_dedrho
+from fits.rs_trial_dedp_table import get_dedp
 
-def get_E(rho, u, p, gamma=1.4):
+def get_E(rho, u, p, fluid):
     #calculate energy based on ideal gas EOS
     #input: scalars density rho, velocity u, presure p, isentropic coefficient gamma
     #output: scalar energy E
-    return p/(gamma-1)+0.5*rho*u*u
+    e=CP.PropsSI('Umass', 'P', p, 'D', rho, fluid)
+    return rho*(e+0.5*u*u)
 
-def get_p(rho, u, E, gamma=1.4):
-    #calculate pressure based on ideal gas EOS
-    #input: scalars or matrices with same dimensions density rho, velocity u, endergy E, isentropic coefficient gamma
-    #output: scalar pressure p
-    return (gamma - 1) * (E - 0.5*rho*(u*u))
+def get_e(rho, u, E):
+    
+    return (E/rho-0.5*u*u)
+
+def get_p(rho, u, E, fluid):
+
+    e=get_e(rho, u, E)    
+    return CP.PropsSI('P', 'D', rho, 'Umass', e, fluid)
 
 def get_cs(p, rho, gamma=1.4):
     #calculate speed of sound
@@ -27,3 +34,16 @@ def get_cs(p, rho, gamma=1.4):
         print("negative speed of sound")
         assert(False)
     return np.sqrt(gamma*p/rho)
+
+def get_chi(p,rho, fluid, distance=0.001, exact=False):
+    #calculate speed of acoustic waves
+    #input: scalars density rho and pressure p, string fluid (must be parsable for CoolProp), distance to adjust derrivative
+    #set bool exact true to use CoolProp, otherwise approximations are used
+    #output: scalar acoustic waves
+    if exact==False:
+        dedrho=get_dedrho(rho, fluid)
+        dedp=get_dedp(p, rho, fluid)
+    else:
+        dedrho=(CP.PropsSI('Umass','P',p,'D',rho*(1+distance),fluid)-CP.PropsSI('Umass','P',p,'D',rho*(1-distance),fluid))/(2*rho*distance)
+        dedp=(CP.PropsSI('Umass','P',p*(1+distance),'D',rho,fluid)-CP.PropsSI('Umass','P',p*(1-distance),'D',rho,fluid))/(2*p*distance)
+    return np.sqrt((p/rho**2-dedrho)/dedp)

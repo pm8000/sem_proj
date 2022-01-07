@@ -97,10 +97,11 @@ def no_outlet(fluxes, fields, fluid, E_correction=0):
     fluxes[1,-1]=eos.get_p(fields[0,-1], fields[1,-1]/fields[0,-1], fields[2,-1], fluid)
     fluxes[2,-1]=0
     
-def get_outlet_bc_p_driven(fluxes, fields, fluid, E_correction=0, last_state=[0]):
-    p_outlet=10e4
-    T_outlet=CP.PropsSI('T', 'P', fields[3,-1], 'D', fields[0,-1], fluid)
-    rho_outlet=CP.PropsSI('D', 'T', T_outlet, 'P', p_outlet, fluid)
+def get_outlet_bc_p_driven(fluxes, fields, p_atm, fluid, E_correction=0, last_state=[0]):
+    p_outlet=p_atm
+    #T_outlet=CP.PropsSI('T', 'P', fields[3,-1], 'D', fields[0,-1], fluid)
+    #rho_outlet=CP.PropsSI('D', 'T', T_outlet, 'P', p_outlet, fluid)
+    rho_outlet=fields[0,-1]
     u_outlet=fields[1,-1]/rho_outlet
     #u_outlet=0
     rho, u, p, E=get_middle_state(fields[1,-1]/fields[0,-1], fields[0,-1], fields[3,-1], u_outlet, rho_outlet, p_outlet, fluid)
@@ -155,7 +156,7 @@ def get_inflow_bc_p_driven(fluxes, inlet, fields, fluid):
     fluxes[2,0]=u*(E+p)
 
             
-def update_fluxes(fluxes, fields, inlet_flux, inlet, fluid, E_correction=0, last_state=[0]):
+def update_fluxes(fluxes, fields, inlet_flux, inlet, p_atm, fluid, E_correction=0, last_state=[0]):
     #calculate fluxes at cell interfaces, assuming Riemann problems at cell boundaries
     #input: (4xN) array fields with stored values of density, momentum, energy and pressure, (3xN+1) array fluxes to write fluxes to
     #       vector of length 3 (inlet_flux) containing inlet fluxes
@@ -177,7 +178,7 @@ def update_fluxes(fluxes, fields, inlet_flux, inlet, fluid, E_correction=0, last
         fluxes[2,i]=u_m*(E_m+p_m)
     
     #outlet BC
-    get_outlet_bc_p_driven(fluxes, fields, fluid, E_correction, last_state)
+    get_outlet_bc_p_driven(fluxes, fields, p_atm, fluid, E_correction, last_state)
     
 def update_fluxes_upwind(fluxes, fields, inlet_flux, inlet, E_correction=0):
     #calculate flux at cell interface based on upwind scheme

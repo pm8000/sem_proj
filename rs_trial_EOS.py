@@ -7,6 +7,8 @@ Created on Fri Nov 26 09:58:26 2021
 """
 import numpy as np
 import CoolProp.CoolProp as CP
+from fits.rs_trial_dedrho_table import get_dedrho
+from fits.rs_trial_dedp_table import get_dedp
 
 def get_E(rho, u, p, fluid):
     #calculate energy based on ideal gas EOS
@@ -33,10 +35,15 @@ def get_cs(p, rho, gamma=1.4):
         assert(False)
     return np.sqrt(gamma*p/rho)
 
-def get_chi(p,rho, fluid, distance=0.01):
+def get_chi(p,rho, fluid, distance=0.001, exact=False):
     #calculate speed of acoustic waves
     #input: scalars density rho and pressure p, string fluid (must be parsable for CoolProp), distance to adjust derrivative
+    #set bool exact true to use CoolProp, otherwise approximations are used
     #output: scalar acoustic waves
-    dedrho=(CP.PropsSI('Umass','P',p,'D',rho*(1+distance),fluid)-CP.PropsSI('Umass','P',p,'D',rho*(1-distance),fluid))/(2*rho*distance)
-    dedp=(CP.PropsSI('Umass','P',p*(1+distance),'D',rho,fluid)-CP.PropsSI('Umass','P',p*(1-distance),'D',rho,fluid))/(2*p*distance)
+    if exact==False:
+        dedrho=get_dedrho(rho, fluid)
+        dedp=get_dedp(p, rho, fluid)
+    else:
+        dedrho=(CP.PropsSI('Umass','P',p,'D',rho*(1+distance),fluid)-CP.PropsSI('Umass','P',p,'D',rho*(1-distance),fluid))/(2*rho*distance)
+        dedp=(CP.PropsSI('Umass','P',p*(1+distance),'D',rho,fluid)-CP.PropsSI('Umass','P',p*(1-distance),'D',rho,fluid))/(2*p*distance)
     return np.sqrt((p/rho**2-dedrho)/dedp)

@@ -15,15 +15,20 @@ import rs_trial_source as src
 import rs_trial_output as out
 import rs_trial_animation as anim
 import CoolProp.CoolProp as CP
+import rs_trial_parallelisation as para
+from mpi4py import MPI
 
 plt.clf()
+par=para.parallel()
+
 
 L=1 #pipe length
 dx=0.01 #grid density
-N=math.ceil(L/dx) #number of cells
+N_tot=math.ceil(L/dx) #number of cells
+N=para.get_N(N_tot, par)
 d=0.1 #pipe diameter
 
-t_end=0.05 #end time
+t_end=0.01 #end time
 cfl=0.5 #cfl number to define time step
 
 fluid='Water'
@@ -35,7 +40,7 @@ T_amb=20+273
 p_amb=1e5
 u_inlet=1
 p_inlet=1*p_amb
-E_loss=0
+#E_loss=0
 rho_inlet=CP.PropsSI('D', 'T',T_inlet, 'P',p_inlet,fluid)
 T_boil=CP.PropsSI('T', 'P', p_amb, 'Q', 0.5,fluid)
 
@@ -63,7 +68,7 @@ fields[5,:]=fields[1,:]/fields[0,:]
 upper_chi_est=eos.get_chi(p_inlet, rho_inlet, fluid) #chi is most likely largest at high temperature
 dt=cfl*dx/upper_chi_est #maybe consider adaptive time step
 nt=math.ceil(t_end/dt)
-E_correction=E_loss*dx/dt
+#E_correction=E_loss*dx/dt
 first_point=np.zeros([6,nt])
 last_state=[0,0,0,0]
 p_evolution=np.zeros([11,first_point.shape[1]])
@@ -76,7 +81,8 @@ animation_time=np.zeros(animation.shape[0])
 #E_flow=np.zeros(nt)
 #t=np.linspace(0, nt*dt, nt)
 #src_sum=np.zeros(22672)
-start=time.time()
+if par.rank==0:
+    start=time.time()
 for i in range(nt):
     #if i%2.6e3==0:
     #   plt.plot(np.linspace(0.005,0.995,100),fields[3,:], label='t='+str(i*dt)+' s')
@@ -88,16 +94,17 @@ for i in range(nt):
         animation[int(i/math.floor(nt/(animation.shape[0]-1))),:,4]=fields[4,:]
         animation[int(i/math.floor(nt/(animation.shape[0]-1))),:,5]=fields[5,:]
         animation_time[int(i/math.floor(nt/(animation.shape[0]-1)))]=i*dt
-    if i%1e2==0:
+    if par.rank==0 and i%1e2==0:
         print("step",i)
     if (i+1)*dt>t_end:
         dt=t_end-i*dt
     #compute fluxes
     #BC are added in the same step
-    if i==15e3:
-        flux.update_fluxes(fluxes, fields, inlet_flux, inlet, p_amb, fluid, E_correction, last_state)
-    else:
-        flux.update_fluxes(fluxes, fields, inlet_flux, inlet, p_amb, fluid, E_correction)
+    #if i==15e3:
+    #    flux.update_fluxes(fluxes, fields, inlet_flux, inlet, p_amb, fluid, E_correction, last_state)
+    #else:
+ 
+    flux.update_fluxes(fluxes, fields, inlet_flux, inlet, p_amb, fluid, par)
     #add source
     #src.add_momentum_source_2(source, fields, d, dx, nu)
     src.add_energy_source(source, T_boil, d, fields, R, T_wall, fluid)
@@ -117,12 +124,12 @@ for i in range(nt):
     #E_tot_hist[i+1]=E_tot
     #dE_hist[i]=E_tot_hist[i+1]-E_tot_hist[i]
     #E_flow[i]=(fluxes[2,0]-fluxes[2,-1])*dt/dx
-    
+    """
     for x in range(0,110,10):
         if x==100:
             x-=1
         p_evolution[math.ceil(x/10),i]=fields[5,x]
-    
+    """
     #first_point[0,i]=fields[0,0]
     #first_point[1,i]=fields[1,0]
     #first_point[2,i]=fields[2,0]
@@ -130,20 +137,26 @@ for i in range(nt):
     #first_point[4,i]=fields[4,0]
     #first_point[5,i]=fields[5,0]
     
-print("time "+str(time.time()-start)+" sec")
+if par.rank==0:
+    print("time "+str(time.time()-start)+" sec")
 #plt.plot(t,src_sum, label='src')
 #plt.plot(t,dE_hist, label='dE')
 #plt.plot(t, E_flow[:], label='net flux')
 #plt.plot(t, E_flow[:]+src_sum[:], label='sum' )
 #plt.plot(first_point[3,:])
 
-anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,0],'density_evolution_w_120_u_1_test.gif',0.5,0.68,animation_time)
-anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,1],'momentum_evolution_w_120_u_1_test.gif',0.0,3.25,animation_time)
-anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,2],'energy_evolution_w_120_u_1_test.gif',1.4e6,1.52e6,animation_time)
-anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,3],'pressure_evolution_w_120_u_1_test.gif',99600,100400,animation_time)
-anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,4],'temperature_evolution_w_120__u_1_test.gif',270,400,animation_time)
-anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,5],'velocity_evolution_w_120_u_1_test.gif',0,1.5,animation_time)
+#merge animation from different processes
+animation=para.merge_results(animation, par)
 
+if par.rank==0:
+    #create graphs for output
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,0],'density_evolution_w_120_u_1_test.gif',0.5,0.68,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,1],'momentum_evolution_w_120_u_1_test.gif',0.0,3.25,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,2],'energy_evolution_w_120_u_1_test.gif',1.4e6,1.52e6,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,3],'pressure_evolution_w_120_u_1_test.gif',99600,100400,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,4],'temperature_evolution_w_120__u_1_test.gif',270,400,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,5],'velocity_evolution_w_120_u_1_test.gif',0,1.5,animation_time)
+"""
 plt.title('Velocity')
 for i in range(p_evolution.shape[0]):
     plt.plot(np.linspace(0,t_end,nt),p_evolution[i,:], label='x= '+str(i*0.1)+'m')
@@ -157,7 +170,7 @@ for i in range(1,first_point.shape[1]-1):
         max_pressure.append(first_point[3,i])
     if first_point[3,i]<first_point[3,i-1] and first_point[3,i]<first_point[3,i+1]:
         min_pressure.append(first_point[3,i])
-"""
+
 plt.plot(max_pressure)
 plt.savefig('result/max_pressure_w_200')
 plt.clf()

@@ -10,6 +10,7 @@ import numpy as np
 import rs_trial_EOS as eos
 import CoolProp.CoolProp as CP
 import pandas as pd
+import rs_trial_parallelisation as para
 
 def minmod(u, u_p, u_m):
     #apply minmod slope limiter
@@ -43,14 +44,14 @@ def get_middle_state(u_l, rho_l, p_l, u_r, rho_r, p_r, fluid):
     E_m=eos.get_E(rho_m, u_m, p_m, fluid)
     return (rho_m, u_m, p_m, E_m)
 
-def get_border_values(fields, i, fluid, inlet=[0,0,0], border=0):
+def get_border_values(fields, i, fluid, inlet=[0,0,0], border=0, p_atm=None, border_val=None):
     #calculate the values at cell interface assuming linear profile within cell limited by minmod
     #input: (4xN) array with stored values of density, velocity and pressure, integer i to denote index,
     #       vector of length 3, containing (in this order) inlet density, velocity and pressure, only required if i==1
     #       parameter border, set to 1 if left cell is boundry cell, -1 if right cell is boundary cell
     #output: tuple of middle state values for density, velocity, pressure and energy
-    if (border !=0 and border !=1 and border !=-1):
-        print("encountered unknown value for border in function get_middle_state")
+    if (border <-3 or border >2):
+        print("encountered invalid value for border in function get_middle_state")
         assert(False)
     #get values at cell boundary
     #boundary cases
@@ -58,11 +59,22 @@ def get_border_values(fields, i, fluid, inlet=[0,0,0], border=0):
         #construct ghost cell to the left to achieve desired flux
         rho_l=fields[0,i-1]+0.5*minmod(fields[0, i-1], fields[0,i], 2*inlet[0]-fields[0,i-1])
         u_l=fields[1,i-1]/fields[0, i-1]+0.5*minmod(fields[1,i-1]/fields[0,i-1], fields[1,i]/fields[0,i], 2*inlet[1]-fields[1,i-1]/fields[0,i-1])
-        p_l=fields[3,i-1]+0.5*minmod(fields[3, i-1], fields[3,i], 2*fields[3,0]-fields[3,i-1])
-
+        p_l=fields[3,i-1]
+        #p_l=fields[3,i-1]+0.5*minmod(fields[3, i-1], fields[3,i], 2*fields[3,0]-fields[3,i-1])
+    
+    elif border==2:
+        rho_l=fields[0, i-1]+0.5*minmod(fields[0,i-1], fields[0,i], border_val[0])
+        u_l=fields[1,i-1]/fields[0,i-1]+0.5*minmod(fields[1,i-1]/fields[0,i-1], fields[1,i]/fields[0,i], border_val[1])
+        p_l=fields[3,i-1]+0.5*minmod(fields[3,i-1], fields[3,i], border_val[2])
+        
+    elif border==-3:
+        rho_l=fields[0, i-1]+0.5*minmod(fields[0,i-1], border_val[0,0], fields[0,i-2])
+        u_l=fields[1,i-1]/fields[0,i-1]+0.5*minmod(fields[1,i-1]/fields[0,i-1], border_val[1,0], fields[1,i-2]/fields[0,i-2])
+        p_l=fields[3,i-1]+0.5*minmod(fields[3,i-1], border_val[2,0], fields[3,i-2])
+        
     else:
         rho_l=fields[0, i-1]+0.5*minmod(fields[0,i-1], fields[0,i], fields[0,i-2])
-        u_l=fields[1,i-1]/fields[0,i-1]+0.5*minmod(fields[1,i-1]/fields[0,i-1], fields[1,i]/fields[0,i], fields[1,i-2]/fields[0,i-1])
+        u_l=fields[1,i-1]/fields[0,i-1]+0.5*minmod(fields[1,i-1]/fields[0,i-1], fields[1,i]/fields[0,i], fields[1,i-2]/fields[0,i-2])
         p_l=fields[3,i-1]+0.5*minmod(fields[3,i-1], fields[3,i], fields[3,i-2])
     if rho_l<0 or pd.isna(rho_l)==True:
         print("density is negative or not a number")
@@ -72,11 +84,24 @@ def get_border_values(fields, i, fluid, inlet=[0,0,0], border=0):
         #on right border there is zero gradient BC, hence minmod would return 0 slope
         rho_r=fields[0,i]
         u_r=fields[1,i]/rho_r
-        p_r=fields[3,i]
+        p_r=fields[3,i]-0.5*minmod(fields[3, i-1], fields[3,i], 2*p_atm-fields[3,i-1])
+        #p_r=fields[3,i]
+        
+    elif border==-2:
+        #on right border process border shared values are taken
+        rho_r=fields[0,i]-0.5*minmod(fields[0,i], border_val[0,0], fields[0,i-1])
+        u_r=fields[1,i]/fields[0,i]-0.5*minmod(fields[1,i]/fields[0,i], border_val[1,0], fields[1,i-1]/fields[0,i-1])
+        p_r=fields[3,i]-0.5*minmod(fields[0,i], border_val[2,0], fields[3,i-1])
+
+    elif border==-3:
+        rho_r=border_val[0,0]-0.5*minmod(border_val[0,0], border_val[0,1], fields[0,i-1])
+        u_r=border_val[1,0]-0.5*minmod(border_val[1,0], border_val[1,1], fields[1,i-1]/fields[0,i-1])
+        p_r=border_val[2,0]-0.5*minmod(border_val[2,0], border_val[2,1], fields[3,i-1])
+    
     else:
-        rho_r=fields[0,i]+0.5*minmod(fields[0,i], fields[0,i+1], fields[0,i-1])
-        u_r=fields[1,i]/fields[0,i]+0.5*minmod(fields[1,i]/fields[0,i], fields[1,i+1]/fields[0,i+1], fields[1,i-1]/fields[0,i-1])
-        p_r=fields[3,i]+0.5*minmod(fields[0,i], fields[3,i+1], fields[3,i-1])
+        rho_r=fields[0,i]-0.5*minmod(fields[0,i], fields[0,i+1], fields[0,i-1])
+        u_r=fields[1,i]/fields[0,i]-0.5*minmod(fields[1,i]/fields[0,i], fields[1,i+1]/fields[0,i+1], fields[1,i-1]/fields[0,i-1])
+        p_r=fields[3,i]-0.5*minmod(fields[0,i], fields[3,i+1], fields[3,i-1])
         
     return(get_middle_state(u_l, rho_l, p_l, u_r, rho_r, p_r, fluid))
 
@@ -156,29 +181,54 @@ def get_inflow_bc_p_driven(fluxes, inlet, fields, fluid):
     fluxes[2,0]=u*(E+p)
 
             
-def update_fluxes(fluxes, fields, inlet_flux, inlet, p_atm, fluid, E_correction=0, last_state=[0]):
+def update_fluxes(fluxes, fields, inlet_flux, inlet, p_atm, fluid, par, E_correction=0, last_state=[0]):
     #calculate fluxes at cell interfaces, assuming Riemann problems at cell boundaries
     #input: (4xN) array fields with stored values of density, momentum, energy and pressure, (3xN+1) array fluxes to write fluxes to
     #       vector of length 3 (inlet_flux) containing inlet fluxes
     #       vector of length 3 (inlet) containing (in this order) inlet density, velocity and pressure
     #output: (3xN+1) array with updated fluxes, passed by reference
-    
-    #inlet BC
-    get_inflow_bc_p_driven(fluxes, inlet, fields, fluid)
-    
-    for i in range(1, fluxes.shape[1]-1):
-        if i==1:
+
+    #inflow BC
+    if par.rank==0:
+        get_inflow_bc_p_driven(fluxes, inlet, fields, fluid)
+    #exchange field info around border to neighbour cell
+    border_upper, border_lower=para.exchange_border(fields, par)
+                        
+    for i in range(1, fluxes.shape[1]):
+        if i>1 and i<fluxes.shape[1]-2:
+            rho_m, u_m, p_m, E_m=get_border_values(fields, i, fluid)           
+        elif i==1 and par.rank==0:
             rho_m, u_m, p_m, E_m=get_border_values(fields, i, fluid, inlet=inlet, border=1)
+            
+        elif i==1:
+            rho_m, u_m, p_m, E_m=get_border_values(fields, i, fluid, inlet=inlet, border=2, border_val=border_lower)
+            
+        elif i==fluxes.shape[1]-2 and par.rank<par.num_procs-1:
+            rho_m, u_m, p_m, E_m=get_border_values(fields, i, fluid, inlet=inlet, border=-2, border_val=border_upper)
+            
         elif i==fluxes.shape[1]-2:
-            rho_m, u_m, p_m, E_m=get_border_values(fields, i, fluid, border=-1)
+            rho_m, u_m, p_m, E_m=get_border_values(fields, i, fluid, border=-1, p_atm=p_atm)
+            
+        elif i==fluxes.shape[1]-1 and par.rank<par.num_procs-1:
+            rho_m, u_m, p_m, E_m=get_border_values(fields, i, fluid, inlet=inlet, border=-3, border_val=border_upper)
+            
+        elif i==fluxes.shape[1]-1:
+            #outlet BC
+            get_outlet_bc_p_driven(fluxes, fields, p_atm, fluid, E_correction, last_state)
+            break
+        
         else:
-            rho_m, u_m, p_m, E_m=get_border_values(fields, i, fluid)
+            print('error during flux calculation: not all cases were included')
+            assert(False)
+            
         fluxes[0,i]=rho_m*u_m
         fluxes[1,i]=rho_m*u_m*u_m+p_m
         fluxes[2,i]=u_m*(E_m+p_m)
     
-    #outlet BC
-    get_outlet_bc_p_driven(fluxes, fields, p_atm, fluid, E_correction, last_state)
+    #comunicate border flux to neighbouring cell
+    fluxes[:,0]=para.exchange_fluxes(fluxes,par)
+
+    
     
 def update_fluxes_upwind(fluxes, fields, inlet_flux, inlet, E_correction=0):
     #calculate flux at cell interface based on upwind scheme

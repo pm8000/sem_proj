@@ -60,7 +60,7 @@ def get_border_values(fields, i, fluid, inlet=[0,0,0], border=0, p_atm=None, bor
         rho_l=fields[0,i-1]+0.5*minmod(fields[0, i-1], fields[0,i], 2*inlet[0]-fields[0,i-1])
         u_l=fields[1,i-1]/fields[0, i-1]+0.5*minmod(fields[1,i-1]/fields[0,i-1], fields[1,i]/fields[0,i], 2*inlet[1]-fields[1,i-1]/fields[0,i-1])
         p_l=fields[3,i-1]
-        #p_l=fields[3,i-1]+0.5*minmod(fields[3, i-1], fields[3,i], 2*fields[3,0]-fields[3,i-1])
+        #p_l=fields[3,i-1]+0.5*minmod(fields[3, i-1], fields[3,i], 2*(1e5)-fields[3,i-1])
     
     elif border==2:
         rho_l=fields[0, i-1]+0.5*minmod(fields[0,i-1], fields[0,i], border_val[0])
@@ -84,7 +84,7 @@ def get_border_values(fields, i, fluid, inlet=[0,0,0], border=0, p_atm=None, bor
         #on right border there is zero gradient BC, hence minmod would return 0 slope
         rho_r=fields[0,i]
         u_r=fields[1,i]/rho_r
-        p_r=fields[3,i]-0.5*minmod(fields[3, i-1], fields[3,i], 2*p_atm-fields[3,i-1])
+        p_r=fields[3,i]-0.5*minmod(fields[3, i-1], fields[3,i], 2*(p_atm-25)-fields[3,i-1])
         #p_r=fields[3,i]
         
     elif border==-2:
@@ -123,7 +123,7 @@ def no_outlet(fluxes, fields, fluid, E_correction=0):
     fluxes[2,-1]=0
     
 def get_outlet_bc_p_driven(fluxes, fields, p_atm, fluid, E_correction=0, last_state=[0]):
-    p_outlet=p_atm
+    p_outlet=p_atm-25
     #T_outlet=CP.PropsSI('T', 'P', fields[3,-1], 'D', fields[0,-1], fluid)
     #rho_outlet=CP.PropsSI('D', 'T', T_outlet, 'P', p_outlet, fluid)
     rho_outlet=fields[0,-1]
@@ -138,6 +138,7 @@ def get_outlet_bc_p_driven(fluxes, fields, p_atm, fluid, E_correction=0, last_st
     print('middle')
     print('rho', rho, 'u', u, 'p', p)
     """
+    #print('u',u,'p',p, 'rho', rho)
     fluxes[0,-1]=rho*u
     fluxes[1,-1]=rho*u*u+p
     fluxes[2,-1]=u*(E+p)
@@ -174,8 +175,10 @@ def get_inflow_bc_p_driven(fluxes, inlet, fields, fluid):
     #fix inlet pressure (only makes sense for pressure higher than ambient)
     #input: (3xN+1) array to write inlet fluxes to, (1x3) vector containing fluxes
     #output: inlet fluxes added to fluxes in the first column, passed by reference
+    #rho_l=CP.PropsSI('D', 'P', 1e5, 'T', inlet[3], fluid)
     rho_l=CP.PropsSI('D', 'P', fields[3,0], 'T', inlet[3], fluid)
-    rho, u, p, E=get_middle_state(inlet[1], rho_l, fields[3,0], fields[1,0]/fields[0,0], fields[0,0], fields[3,0], fluid)
+    #rho, u, p, E=get_middle_state(inlet[1], rho_l, fields[3,0], fields[1,0]/fields[0,0], fields[0,0], fields[3,0], fluid)
+    rho, u, p, E=get_middle_state(inlet[1], rho_l, 1e5, fields[1,0]/fields[0,0], fields[0,0], fields[3,0], fluid)
     fluxes[0,0]=rho*u
     fluxes[1,0]=rho*u*u+p
     fluxes[2,0]=u*(E+p)

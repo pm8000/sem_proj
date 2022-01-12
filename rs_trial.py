@@ -28,7 +28,7 @@ N_tot=math.ceil(L/dx) #number of cells
 N=para.get_N(N_tot, par)
 d=0.1 #pipe diameter
 
-t_end=0.01 #end time
+t_end=0.001 #end time
 cfl=0.5 #cfl number to define time step
 
 fluid='Water'
@@ -43,6 +43,7 @@ p_inlet=1*p_amb
 #E_loss=0
 rho_inlet=CP.PropsSI('D', 'T',T_inlet, 'P',p_inlet,fluid)
 T_boil=CP.PropsSI('T', 'P', p_amb, 'Q', 0.5,fluid)
+appendix='w_u_1_alpha'
 
 inlet=np.array([rho_inlet,u_inlet,p_inlet,T_inlet])
 inlet_flux=flux.calc_inlet_bc(rho_inlet, u_inlet, p_inlet, fluid)
@@ -71,8 +72,9 @@ nt=math.ceil(t_end/dt)
 #E_correction=E_loss*dx/dt
 first_point=np.zeros([6,nt])
 last_state=[0,0,0,0]
-p_evolution=np.zeros([11,first_point.shape[1]])
-animation=np.zeros([int(t_end*4e4/3)+1,N,6])
+p_evolution=np.zeros([3,first_point.shape[1]])
+animation_size=min(int(12e3), nt)
+animation=np.zeros([animation_size,N,6])
 animation_time=np.zeros(animation.shape[0])
 #E_tot=np.sum(fields[2,:])
 #E_tot_hist=np.zeros(nt+1)
@@ -86,6 +88,7 @@ if par.rank==0:
 for i in range(nt):
     #if i%2.6e3==0:
     #   plt.plot(np.linspace(0.005,0.995,100),fields[3,:], label='t='+str(i*dt)+' s')
+    
     if i%math.floor(nt/(animation.shape[0]-1))==0 and i/math.floor(nt/(animation.shape[0]-1))<animation.shape[0]:
         animation[int(i/math.floor(nt/(animation.shape[0]-1))),:,0]=fields[0,:]
         animation[int(i/math.floor(nt/(animation.shape[0]-1))),:,1]=fields[1,:]
@@ -94,6 +97,7 @@ for i in range(nt):
         animation[int(i/math.floor(nt/(animation.shape[0]-1))),:,4]=fields[4,:]
         animation[int(i/math.floor(nt/(animation.shape[0]-1))),:,5]=fields[5,:]
         animation_time[int(i/math.floor(nt/(animation.shape[0]-1)))]=i*dt
+    
     if par.rank==0 and i%1e2==0:
         print("step",i)
     if (i+1)*dt>t_end:
@@ -103,7 +107,6 @@ for i in range(nt):
     #if i==15e3:
     #    flux.update_fluxes(fluxes, fields, inlet_flux, inlet, p_amb, fluid, E_correction, last_state)
     #else:
- 
     flux.update_fluxes(fluxes, fields, inlet_flux, inlet, p_amb, fluid, par)
     #add source
     #src.add_momentum_source_2(source, fields, d, dx, nu)
@@ -124,21 +127,31 @@ for i in range(nt):
     #E_tot_hist[i+1]=E_tot
     #dE_hist[i]=E_tot_hist[i+1]-E_tot_hist[i]
     #E_flow[i]=(fluxes[2,0]-fluxes[2,-1])*dt/dx
+    #CAVEAT: No more than 1 millions steps should be written to output
+    #CAVEAT: Only to be used without multithreading
+    #out.write_step(fields, i, dt, appendix)
     """
-    for x in range(0,110,10):
-        if x==100:
-            x-=1
-        p_evolution[math.ceil(x/10),i]=fields[5,x]
-    """
+    for x in range(N):
+        if x+(par.rank-1)*N: #only to be used of all processes are of equal length
+            if x+(par.rank-1)*N==100:
+                x-=1
+            p_evolution[math.ceil((x+(par.rank-1))/10),i]=fields[5,x]
+    
+    if par.rank==par.num_procs-1:
+        p_evolution[0,i]=fields[5,79]
+        p_evolution[1,i]=fields[5,89]
+        p_evolution[2,i]=fields[5,99]
     #first_point[0,i]=fields[0,0]
     #first_point[1,i]=fields[1,0]
     #first_point[2,i]=fields[2,0]
     #first_point[3,i]=fields[3,0]
     #first_point[4,i]=fields[4,0]
     #first_point[5,i]=fields[5,0]
-    
+    """  
 if par.rank==0:
-    print("time "+str(time.time()-start)+" sec")
+    runtime=time.time()-start
+    out.write_runtime(runtime, appendix)
+    print("time "+str(runtime)+" sec")
 #plt.plot(t,src_sum, label='src')
 #plt.plot(t,dE_hist, label='dE')
 #plt.plot(t, E_flow[:], label='net flux')
@@ -149,19 +162,22 @@ if par.rank==0:
 animation=para.merge_results(animation, par)
 
 if par.rank==0:
+    #output data in csv table
+    out.write_all(animation, cfl*dx/upper_chi_est, appendix)
     #create graphs for output
-    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,0],'density_evolution_w_120_u_1_test.gif',0.5,0.68,animation_time)
-    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,1],'momentum_evolution_w_120_u_1_test.gif',0.0,3.25,animation_time)
-    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,2],'energy_evolution_w_120_u_1_test.gif',1.4e6,1.52e6,animation_time)
-    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,3],'pressure_evolution_w_120_u_1_test.gif',99600,100400,animation_time)
-    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,4],'temperature_evolution_w_120__u_1_test.gif',270,400,animation_time)
-    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,5],'velocity_evolution_w_120_u_1_test.gif',0,1.5,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,0],'result/density_evolution_w_120_u_1_alpha.gif',0.5,0.68,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,1],'result/momentum_evolution_w_120_u_1_alpha.gif',0.0,3.25,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,2],'result/energy_evolution_w_120_u_1_alpha.gif',1.4e6,1.52e6,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,3],'result/pressure_evolution_w_120_u_1_alpha.gif',99600,100400,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,4],'result/temperature_evolution_w_120__u_1_alpha.gif',270,400,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,5],'result/velocity_evolution_w_120_u_1_alpha.gif',0,1.5,animation_time)
 """
-plt.title('Velocity')
-for i in range(p_evolution.shape[0]):
-    plt.plot(np.linspace(0,t_end,nt),p_evolution[i,:], label='x= '+str(i*0.1)+'m')
-plt.legend(bbox_to_anchor=(1.01,1),loc='upper left', borderaxespad=0)
-plt.show()
+if par.rank==par.num_procs-1:
+    plt.title('Velocity')
+    for i in range(p_evolution.shape[0]):
+        plt.plot(np.linspace(0,t_end,nt),p_evolution[i,:], label='x= '+str(i*0.1+0.8)+'m')
+    plt.legend(bbox_to_anchor=(1.01,1),loc='upper left', borderaxespad=0)
+    plt.show()
 
 max_pressure=[]
 min_pressure=[]

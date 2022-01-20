@@ -69,7 +69,7 @@ def write_step(fields, i, dt, appendix):
             visualwriter = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
             visualwriter.writerow(['time'] + [(i+1)*dt])
             
-def write_all(data, dt, appendix):
+def write_all(data, timestamp, appendix):
     for i in range(data.shape[0]):
         if i==0:
             fname='result/density_'+appendix+'.csv'
@@ -99,7 +99,7 @@ def write_all(data, dt, appendix):
             fname='result/time_'+appendix+'.csv'
             with open(fname, mode='w', newline='') as csvfile:
                 visualwriter = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
-                visualwriter.writerow(['time'] + [dt])
+                visualwriter.writerow(['time'] + [timestamp[i]])
                 
         else:
             fname='result/density_'+appendix+'.csv'
@@ -129,7 +129,7 @@ def write_all(data, dt, appendix):
             fname='result/time_'+appendix+'.csv'
             with open(fname, mode='a+', newline='') as csvfile:
                 visualwriter = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
-                visualwriter.writerow(['time'] + [(i+1)*dt])
+                visualwriter.writerow(['time'] + [timestamp[i]])
                 
 def write_runtime(runtime,appendix):
     fname='result/runtime_'+appendix+'.txt'            

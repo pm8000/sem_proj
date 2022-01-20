@@ -17,5 +17,5 @@ def create_animation(i, x, u, y_min,y_max,t):
     
 def create_gif(x,nt,u,fname,y_min,y_max,t):
     fig=plt.figure()
-    animation=anim.FuncAnimation(fig,create_animation, fargs=(x,u,y_min,y_max,t),frames=range(0,nt,10),blit=False, interval=5)
+    animation=anim.FuncAnimation(fig,create_animation, fargs=(x,u,y_min,y_max,t),frames=range(0,nt,200),blit=False, interval=1)
     animation.save(fname, dpi=80, writer='Pillow')

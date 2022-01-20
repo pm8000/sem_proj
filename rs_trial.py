@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 import time
+import pandas as pd
 import rs_trial_EOS as eos
 import rs_trial_fluxes as flux
 import rs_trial_source as src
@@ -16,7 +17,7 @@ import rs_trial_output as out
 import rs_trial_animation as anim
 import CoolProp.CoolProp as CP
 import rs_trial_parallelisation as para
-from mpi4py import MPI
+
 
 plt.clf()
 par=para.parallel()
@@ -28,25 +29,36 @@ N_tot=math.ceil(L/dx) #number of cells
 N=para.get_N(N_tot, par)
 d=0.1 #pipe diameter
 
-t_end=0.001 #end time
+t_end=0.1 #end time
 cfl=0.5 #cfl number to define time step
 
-fluid='Water'
-nu=15e-6 #kinematic viscosity
-gamma=1.4
-R=287.058
-T_inlet=120+273
-T_amb=20+273
+state='real'  #real or ideal
+assert(state=='real' or state=='ideal')
+fluid='Water' #for idal gases this is not used
+gamma=1.4     #for real gases this is not used
+R=287.058     #for real gases this is not used
+if state=='ideal':
+    ideal_gas=eos.ideal_gas(gamma, R)
+else:
+    ideal_gas=None
+#nu=15e-6 #kinematic viscosity, required only if wall shear stress is included
+T_inlet=200+273
+T_amb=110+273
 p_amb=1e5
-u_inlet=1
+u_inlet=10
 p_inlet=1*p_amb
 #E_loss=0
-rho_inlet=CP.PropsSI('D', 'T',T_inlet, 'P',p_inlet,fluid)
-T_boil=CP.PropsSI('T', 'P', p_amb, 'Q', 0.5,fluid)
-appendix='w_u_1_alpha'
+if state=='real':
+    rho_inlet=CP.PropsSI('D', 'T',T_inlet, 'P',p_inlet,fluid)
+    T_boil=CP.PropsSI('T', 'P', p_amb, 'Q', 0.1,fluid)
+    #T_amb=T_boil
+else:
+    rho_inlet=p_inlet/(ideal_gas.R*T_inlet)
+    T_boil=None
+appendix='run_time_test_3_pcs_w_approximated'
 
 inlet=np.array([rho_inlet,u_inlet,p_inlet,T_inlet])
-inlet_flux=flux.calc_inlet_bc(rho_inlet, u_inlet, p_inlet, fluid)
+inlet_flux=flux.calc_inlet_bc(rho_inlet, u_inlet, p_inlet, fluid,state=state, ideal_gas=ideal_gas)
 #print(eos.get_E(rho_inlet, u_inlet, p_inlet))
 
 fields=np.zeros([6, N]) #0 stores density, 1 stores momentum, 2 stores energy, 3 stores pressure, 4 stores temperature(, 5 stores velocity)
@@ -58,22 +70,29 @@ source=np.zeros([3,N])
 
 #initialise fields
 
-fields[0,:]=CP.PropsSI('D', 'P', p_amb, 'T', T_inlet,fluid)
+if state=='real':
+    fields[0,:]=CP.PropsSI('D', 'P', p_amb, 'T', T_amb,fluid)   #use if initial condition is single phase
+    #fields[0,:]=CP.PropsSI('D', 'P', p_amb, 'Q', 0.5, fluid)    #use if initial condition is two phase
+else:
+    fields[0,:]=p_amb/(ideal_gas.R*T_amb)
 fields[1,:]=fields[0,:]*u_inlet
-fields[2,:]=eos.get_E(fields[0,:], fields[1,:]/fields[0,:], p_amb, fluid)
+fields[2,:]=eos.get_E(fields[0,:], fields[1,:]/fields[0,:], p_amb, fluid, state=state, ideal_gas=ideal_gas)
 fields[3,:]=p_amb
-fields[4,:]=T_inlet
+fields[4,:]=T_amb
 fields[5,:]=fields[1,:]/fields[0,:]
 
 #determine time step
-upper_chi_est=eos.get_chi(p_inlet, rho_inlet, fluid) #chi is most likely largest at high temperature
+if state=='real':
+    upper_chi_est=eos.get_chi(p_inlet, rho_inlet, fluid) #chi is most likely largest at high temperature
+else:
+    upper_chi_est=eos.get_cs(p_inlet, rho_inlet, ideal_gas=ideal_gas)
 dt=cfl*dx/upper_chi_est #maybe consider adaptive time step
 nt=math.ceil(t_end/dt)
 #E_correction=E_loss*dx/dt
 first_point=np.zeros([6,nt])
 last_state=[0,0,0,0]
 p_evolution=np.zeros([3,first_point.shape[1]])
-animation_size=min(int(12e3), nt)
+animation_size=min(int(10), nt)
 animation=np.zeros([animation_size,N,6])
 animation_time=np.zeros(animation.shape[0])
 #E_tot=np.sum(fields[2,:])
@@ -107,7 +126,7 @@ for i in range(nt):
     #if i==15e3:
     #    flux.update_fluxes(fluxes, fields, inlet_flux, inlet, p_amb, fluid, E_correction, last_state)
     #else:
-    flux.update_fluxes(fluxes, fields, inlet_flux, inlet, p_amb, fluid, par)
+    flux.update_fluxes(fluxes, fields, inlet_flux, inlet, p_amb, par, fluid, state=state, ideal_gas=ideal_gas)
     #add source
     #src.add_momentum_source_2(source, fields, d, dx, nu)
     src.add_energy_source(source, T_boil, d, fields, R, T_wall, fluid)
@@ -119,9 +138,22 @@ for i in range(nt):
     #plt.show()
     #integrate with euler explicit
     fields[:3,:]+=(dt/dx*(fluxes[:,:-1]-fluxes[:,1:])+dt*source[:,:])
-    fields[3,:]=eos.get_p(fields[0,:], fields[1,:]/fields[0,:], fields[2,:], fluid)
-    fields[4,:]=CP.PropsSI('T', 'P', fields[3,:], 'D', fields[0,:], fluid)
+    #print(eos.get_p(fields[0,:], fields[1,:]/fields[0,:], fields[2,:], fluid))
+    fields[3,:]=eos.get_p(fields[0,:], fields[1,:]/fields[0,:], fields[2,:], fluid, state=state, ideal_gas=ideal_gas)
+    if state=='real':
+        fields[4,:]=CP.PropsSI('T', 'P', fields[3,:], 'D', fields[0,:], fluid)
+    else:
+        fields[4,:]=fields[3,:]/(ideal_gas.R*fields[0,:])
     fields[5,:]=fields[1,:]/fields[0,:]
+    """
+    for i in range(fields.shape[1]):
+        if fields[3,i]==float('inf'):
+            fields[3,i]=0
+        #if fields[4,i]==float('inf'):
+        #    fields[4,i]=T_wall[i]
+        if pd.isna(fields[5,i]):
+            fields[5,i]=0
+    """
     #E_tot=np.sum(fields[2,:])
     #out.write_energy_loss(i, dt, E_tot)
     #E_tot_hist[i+1]=E_tot
@@ -163,14 +195,16 @@ animation=para.merge_results(animation, par)
 
 if par.rank==0:
     #output data in csv table
-    out.write_all(animation, cfl*dx/upper_chi_est, appendix)
+    out.write_all(animation,animation_time, appendix)
+    """
     #create graphs for output
-    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,0],'result/density_evolution_w_120_u_1_alpha.gif',0.5,0.68,animation_time)
-    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,1],'result/momentum_evolution_w_120_u_1_alpha.gif',0.0,3.25,animation_time)
-    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,2],'result/energy_evolution_w_120_u_1_alpha.gif',1.4e6,1.52e6,animation_time)
-    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,3],'result/pressure_evolution_w_120_u_1_alpha.gif',99600,100400,animation_time)
-    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,4],'result/temperature_evolution_w_120__u_1_alpha.gif',270,400,animation_time)
-    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,5],'result/velocity_evolution_w_120_u_1_alpha.gif',0,1.5,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,0],'result/density'+appendix+'.gif',0.4,2.5,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,1],'result/momentum'+appendix+'.gif',0.0,3.25,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,2],'result/energy'+appendix+'.gif',1.4e6,2.45e6,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,3],'result/pressure'+appendix+'.gif',99000,101000,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,4],'result/temperature'+appendix+'.gif',370,400,animation_time)
+    anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,5],'result/velocity'+appendix+'.gif',-4.0,1.5,animation_time)
+    """
 """
 if par.rank==par.num_procs-1:
     plt.title('Velocity')

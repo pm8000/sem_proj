@@ -11,7 +11,12 @@ import CoolProp.CoolProp as CP
 
 def get_dedrho(rho, fluid, distance=0.001):
     #pressure fixed at 1 bar
+    #pressure should not deviate more than 1kPa from 1 bar
     #piecewise cubic approximation of derrivative
+    #inputs: floats p (pressure)
+    #        string fluid(name known by CoolProp, approximation only works for water)
+    #        float distance (distance bewteen the to evaluated values to compute derrivative, optional)
+    #output: derivative de/drho approximated at given point
     
     if rho<0.4:
         #density not in domain (T higher than 270°C)

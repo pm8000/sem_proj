@@ -31,8 +31,8 @@ def get_N(N_tot, parallel):
     #        parallel class parallel
     #output: int N (amount of grid cells for current thread)
     N=N_tot*1.0/parallel.num_procs
-    if N<2:
-        print("Too many threads, number of threads must be at most half the number of cells")
+    if N<4:
+        print("Too many threads, number of threads must be at most four times the number of cells")
         assert(False)
     remainder=N_tot%parallel.num_procs
     if parallel.rank<remainder:

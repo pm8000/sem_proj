@@ -9,7 +9,14 @@ Created on Fri Dec  3 10:40:20 2021
 import csv
 
 def write_step(fields, i, dt, appendix):
-    #only to be performed when runing on single core
+    #CAVEAT: only to be performed when running on single core
+    #current step is written/appended to .csv output file
+    #files are saved in folder result (make sure folder exists)
+    #inputs: array fields(6xN, contains all field variables at current time step)
+    #        int i (time step)
+    #        float dt (time step size)
+    #        string appendix(part of filename to label simulation)
+    #output: void (.csv files are saved/updated in folder result)
     if i==0:
         fname='result/density_'+appendix+'.csv'
         with open(fname, mode='w', newline='') as csvfile:
@@ -70,6 +77,12 @@ def write_step(fields, i, dt, appendix):
             visualwriter.writerow(['time'] + [(i+1)*dt])
             
 def write_all(data, timestamp, appendix):
+    #CAVEAT: if more than approx. 1 million time steps are written the .csv cannot be opened with MS Excel or simillar
+    # write all data to a .csv output file
+    #inputs: array data (ntxNx6, data to be written to output file)
+    #        array timestamp (timestamp.shape=data.shape[0], contains time to allocate data values to a certain time in plot_data.py)
+    #        string appendix(part of filename to label simulation)
+    #output: void (.csv files are saved in folder result)
     for i in range(data.shape[0]):
         if i==0:
             fname='result/density_'+appendix+'.csv'
@@ -132,6 +145,10 @@ def write_all(data, timestamp, appendix):
                 visualwriter.writerow(['time'] + [timestamp[i]])
                 
 def write_runtime(runtime,appendix):
+    #write the run time (time in loop) to a .txt file and save in result folder (folder must exist)
+    #inputs: float runtime
+    #        string appendix(part of filename to label simulation)
+    #output: void (.csv files are saved/updated in folder result)
     fname='result/runtime_'+appendix+'.txt'            
     with open(fname, 'w') as f:
         f.write(str(runtime)+' sec')

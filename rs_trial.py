@@ -24,38 +24,43 @@ par=para.parallel()
 
 
 L=1 #pipe length
-dx=0.01 #grid density
+dx=0.009 #grid density
 N_tot=math.ceil(L/dx) #number of cells
 N=para.get_N(N_tot, par)
 d=0.1 #pipe diameter
 
-t_end=0.1 #end time
-cfl=0.5 #cfl number to define time step
+t_end=1.5 #end time
+cfl=0.4 #cfl number to define time step
 
 state='real'  #real or ideal
+start_region=2 #type 1 if initial condition is single phase, or 2 if initial condition is two phase, only considered for real gases
+divisor=1
 assert(state=='real' or state=='ideal')
-fluid='Water' #for idal gases this is not used
-gamma=1.4     #for real gases this is not used
-R=287.058     #for real gases this is not used
+assert(start_region==1 or start_region==2)
+fluid='Water' #fluid must be known for CoolProp (real gas only)
+gamma=1.4   #ideal gas only
+R=287.058   #ideal gas only
 if state=='ideal':
     ideal_gas=eos.ideal_gas(gamma, R)
 else:
     ideal_gas=None
 #nu=15e-6 #kinematic viscosity, required only if wall shear stress is included
-T_inlet=200+273
-T_amb=110+273
+T_inlet=120+273 #inlet is always assumed to be in a single phase (gas) region
+T_amb=20+273 #initial temperature, considered if start_region==1
+q_init=0.2 #initial steam quality, considered if start_region==2
 p_amb=1e5
-u_inlet=10
+u_inlet=3
 p_inlet=1*p_amb
 #E_loss=0
 if state=='real':
     rho_inlet=CP.PropsSI('D', 'T',T_inlet, 'P',p_inlet,fluid)
-    T_boil=CP.PropsSI('T', 'P', p_amb, 'Q', 0.1,fluid)
-    #T_amb=T_boil
+    T_boil=CP.PropsSI('T', 'P', p_amb, 'Q', 0.5,fluid) #find boiling temperature (Q value is arbitrary number between (excluding) 0 and 1)
+    if start_region==2:
+        T_amb=T_boil
 else:
     rho_inlet=p_inlet/(ideal_gas.R*T_inlet)
     T_boil=None
-appendix='run_time_test_3_pcs_w_approximated'
+appendix='120_to_q_0.2_w_cool_50_u_3_2500'
 
 inlet=np.array([rho_inlet,u_inlet,p_inlet,T_inlet])
 inlet_flux=flux.calc_inlet_bc(rho_inlet, u_inlet, p_inlet, fluid,state=state, ideal_gas=ideal_gas)
@@ -63,22 +68,40 @@ inlet_flux=flux.calc_inlet_bc(rho_inlet, u_inlet, p_inlet, fluid,state=state, id
 
 fields=np.zeros([6, N]) #0 stores density, 1 stores momentum, 2 stores energy, 3 stores pressure, 4 stores temperature(, 5 stores velocity)
 fluxes=np.zeros([3, N+1]) #0 stores density flux, 1 stores momentum flux, 2 stores energy flux
-#T_wall=np.linspace(473,273,N)
+
 T_wall=np.zeros(N)
-T_wall[:]=T_amb
+if start_region==1:
+    T_wall[:]=T_amb
+elif start_region==2:
+    T_wall[:]=T_boil-50
+"""
+#uncomment and modify if the wall temperature is not uniform
+#CAVEAT if code is executed on multiple cores the T_wall array is only the domain of one process
+#CAVEAT use if statements and par.rank to assign different profiles to different processes
+if par.rank==0:
+    T_wall=np.zeros(N)
+    T_wall[:]=T_inlet
+elif par.rank==1:
+    T_wall=np.linspace(473,293,N)
+else:
+    T_wall=np.zeros(N)
+    T_wall[:]=T_amb
+"""
 source=np.zeros([3,N])
 
 #initialise fields
 
 if state=='real':
-    fields[0,:]=CP.PropsSI('D', 'P', p_amb, 'T', T_amb,fluid)   #use if initial condition is single phase
-    #fields[0,:]=CP.PropsSI('D', 'P', p_amb, 'Q', 0.5, fluid)    #use if initial condition is two phase
+    if start_region==1:
+        fields[0,:]=CP.PropsSI('D', 'P', p_amb, 'T', T_wall[:],fluid)
+    elif start_region==2:
+        fields[0,:]=CP.PropsSI('D', 'P', p_amb, 'Q', q_init, fluid)    #use if initial condition is two phase
 else:
-    fields[0,:]=p_amb/(ideal_gas.R*T_amb)
+    fields[0,:]=p_amb/(ideal_gas.R*T_wall[:])
 fields[1,:]=fields[0,:]*u_inlet
 fields[2,:]=eos.get_E(fields[0,:], fields[1,:]/fields[0,:], p_amb, fluid, state=state, ideal_gas=ideal_gas)
 fields[3,:]=p_amb
-fields[4,:]=T_amb
+fields[4,:]=T_wall
 fields[5,:]=fields[1,:]/fields[0,:]
 
 #determine time step
@@ -92,8 +115,8 @@ nt=math.ceil(t_end/dt)
 first_point=np.zeros([6,nt])
 last_state=[0,0,0,0]
 p_evolution=np.zeros([3,first_point.shape[1]])
-animation_size=min(int(10), nt)
-animation=np.zeros([animation_size,N,6])
+#animation=np.zeros([anim.get_animation_size(nt, 10e3),N,6])
+animation=np.zeros([10121+1,N,6])
 animation_time=np.zeros(animation.shape[0])
 #E_tot=np.sum(fields[2,:])
 #E_tot_hist=np.zeros(nt+1)
@@ -108,7 +131,19 @@ for i in range(nt):
     #if i%2.6e3==0:
     #   plt.plot(np.linspace(0.005,0.995,100),fields[3,:], label='t='+str(i*dt)+' s')
     
-    if i%math.floor(nt/(animation.shape[0]-1))==0 and i/math.floor(nt/(animation.shape[0]-1))<animation.shape[0]:
+    #if i%math.floor(nt/(animation.shape[0]-1))==0 and i/math.floor(nt/(animation.shape[0]-1))<animation.shape[0]:
+    #if i%nt/animation.shape[0]==0:    
+    if i%divisor==0:
+        pass
+        """
+        animation[int(i/divisor),:,0]=fields[0,:]
+        animation[int(i/divisor),:,1]=fields[1,:]
+        animation[int(i/divisor),:,2]=fields[2,:]
+        animation[int(i/divisor),:,3]=fields[3,:]
+        animation[int(i/divisor),:,4]=fields[4,:]
+        animation[int(i/divisor),:,5]=fields[5,:]
+        animation_time[int(i/divisor)]=i*dt
+        
         animation[int(i/math.floor(nt/(animation.shape[0]-1))),:,0]=fields[0,:]
         animation[int(i/math.floor(nt/(animation.shape[0]-1))),:,1]=fields[1,:]
         animation[int(i/math.floor(nt/(animation.shape[0]-1))),:,2]=fields[2,:]
@@ -116,7 +151,7 @@ for i in range(nt):
         animation[int(i/math.floor(nt/(animation.shape[0]-1))),:,4]=fields[4,:]
         animation[int(i/math.floor(nt/(animation.shape[0]-1))),:,5]=fields[5,:]
         animation_time[int(i/math.floor(nt/(animation.shape[0]-1)))]=i*dt
-    
+        """
     if par.rank==0 and i%1e2==0:
         print("step",i)
     if (i+1)*dt>t_end:
@@ -129,7 +164,7 @@ for i in range(nt):
     flux.update_fluxes(fluxes, fields, inlet_flux, inlet, p_amb, par, fluid, state=state, ideal_gas=ideal_gas)
     #add source
     #src.add_momentum_source_2(source, fields, d, dx, nu)
-    src.add_energy_source(source, T_boil, d, fields, R, T_wall, fluid)
+    src.add_energy_source(source, T_boil, d, fields, T_wall)
     #src_sum[i]=np.sum(source[2,:])*dt
     #plt.plot(np.linspace(0,1,101),fluxes[0,:], label='rho*u')
     #plt.plot(np.linspace(0,1,101),fluxes[1,:], label='rho*u*u+p')
@@ -161,7 +196,8 @@ for i in range(nt):
     #E_flow[i]=(fluxes[2,0]-fluxes[2,-1])*dt/dx
     #CAVEAT: No more than 1 millions steps should be written to output
     #CAVEAT: Only to be used without multithreading
-    #out.write_step(fields, i, dt, appendix)
+    if i%divisor==0:
+        out.write_step(fields, i, dt, appendix)
     """
     for x in range(N):
         if x+(par.rank-1)*N: #only to be used of all processes are of equal length
@@ -194,8 +230,9 @@ if par.rank==0:
 animation=para.merge_results(animation, par)
 
 if par.rank==0:
+    pass
     #output data in csv table
-    out.write_all(animation,animation_time, appendix)
+    #out.write_all(animation,animation_time, appendix)
     """
     #create graphs for output
     anim.create_gif(np.linspace(0.05,0.95,100),animation.shape[0],animation[:,:,0],'result/density'+appendix+'.gif',0.4,2.5,animation_time)

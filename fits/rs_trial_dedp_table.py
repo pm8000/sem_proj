@@ -8,10 +8,16 @@ Created on Thu Jan  6 17:45:43 2022
 import CoolProp.CoolProp as CP
 
 def get_dedp(p, rho, fluid, distance=0.001):
-    #approximate derrivative by linear variation in p and piecewise polynomials for rho
+    #approximate derivative by linear variation in p and piecewise polynomials for rho
     #pressure should not deviate more than 1kPa from 1bar
+    #pressure dependence is approximated by linear fit, with coefficents fitted depending on density
+    #first based on density the coefficients for pressure dependence are evaluated
+    #inputs: floats p (pressure), rho(density)
+    #        string fluid(name known by CoolProp, approximation only works for water)
+    #        float distance (distance bewteen the to evaluated values to compute derrivative, optional)
+    #output: derivative de/dp approximated at given point
     
-    if rho<0.4:
+    if rho<0.4 or fluid!='Water':
         #not in area of interest
         return (CP.PropsSI('Umass','P',p*(1+distance),'D',rho,fluid)-CP.PropsSI('Umass','P',p*(1-distance),'D',rho,fluid))/(2*p*distance)
         

@@ -272,7 +272,7 @@ def update_fluxes(fluxes, fields, inlet_flux, inlet, p_out, par, fluid=None, ide
             rho_m, u_m, p_m, E_m=get_border_values(fields, i, fluid, inlet=inlet, border=-3, border_val=border_upper, state=state, ideal_gas=ideal_gas)
             
         elif i==fluxes.shape[1]-1: #outlet BC (fluxes are added directly, therefore loop is broken out)
-            get_outlet_bc_p_driven(fluxes, fields, p_out, fluid, E_correction, state=state, ideal_gas=ideal_gas)
+            get_outlet_bc_p_driven(fluxes, fields, p_out, fluid, state=state, ideal_gas=ideal_gas)
             break
         
         else:
